@@ -1,0 +1,12 @@
+API_KEY
+api_key
+apikey
+secret
+password
+token
+Authorization
+/admin
+/debug
+.env
+config.php
+credentials.json
