@@ -2,23 +2,23 @@
 #
 # bin/scan.sh – Professional code security scanner
 
-# 1) تحميل الدوال وطباعة INFO إن نجح
+# 1) تحميل الدوال
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/functions.sh"
 load_config
 
 # 2) القيم الافتراضية
 SCAN_DIR="."
-LOG_FILE="../output/results.log"
-JSON_FILE="../output/results.json"
+LOG_FILE="output/results.log"
+JSON_FILE="output/results.json"
 
 # 3) دالة عرض الاستخدام
 usage() {
   cat <<EOF
-Usage: $0 [-d dir] [-o out.log] [-j out.json] [-h]
-  -d DIR     Directory to scan (default: .)
-  -o FILE    Plain-text log (default: output/results.log)
-  -j FILE    JSON report (default: output/results.json)
-  -h         Show help
+Usage: $0 [-d dir] [-o log] [-j json] [-h]
+  -d DIR   Directory to scan (default: .)
+  -o FILE  Plain-text log (default: output/results.log)
+  -j FILE  JSON report (default: output/results.json)
+  -h       Show help
 EOF
   exit 1
 }
@@ -29,6 +29,7 @@ while getopts "d:o:j:h" opt; do
     d) SCAN_DIR="$OPTARG" ;;
     o) LOG_FILE="$OPTARG" ;;
     j) JSON_FILE="$OPTARG" ;;
+    h) usage ;;
     *) usage ;;
   esac
 done
@@ -39,38 +40,29 @@ if [[ ! -d "$SCAN_DIR" ]]; then
   exit 1
 fi
 
-# 6) تهيئة مجلدات الإخراج
+# 6) تهيئة ملفات الإخراج ومسح القديم
 mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$JSON_FILE")"
 > "$LOG_FILE"
 echo '[]' > "$JSON_FILE"
 
-log INFO "Scanning directory: $SCAN_DIR"
-log INFO "Logging to: $LOG_FILE"
-log INFO "JSON output: $JSON_FILE"
+log INFO "Scanning: $SCAN_DIR"
+log INFO "Plain log: $LOG_FILE"
+log INFO "JSON out : $JSON_FILE"
 
-# 7) اختيار أداة البحث الأسرع
-if command -v rg &>/dev/null; then
-  # ripgrep إذا موجود
-  SEARCH_TOOL() {
-    rg --no-heading --line-number --color=always \
-       $(printf -- "--glob '!%s' " "${IGNORE[@]}") \
-       "$1" "$SCAN_DIR"
-  }
-else
-  # fallback إلى grep
-  SEARCH_TOOL() {
-    grep -R --color=always \
-         --exclude-dir=$(printf "{%s}" "$(IFS=,; echo "${IGNORE[*]}")") \
-         -n "$1" "$SCAN_DIR"
-  }
-fi
+# 7) إجبار استخدام grep فقط مع استثناء مجلدات غير الكود
+SEARCH_TOOL() {
+  grep -R --color=always -n \
+    --exclude-dir={.git,config,output,bin,lib,.github} \
+    "$1" "$SCAN_DIR"
+}
 
-# 8) تنفيذ الفحص وجمع النتائج
+# 8) تنفيذ الفحص ودوّن النتائج
 RESULTS_JSON=()
 for PATTERN in "${RULES[@]}"; do
   log INFO "Pattern: $PATTERN"
   while IFS= read -r line; do
-    echo -e "$line" | tee -a "$LOG_FILE"
+    echo "$line" | tee -a "$LOG_FILE"
+    # تجزئة السطر
     FILE=${line%%:*}
     LN=${line#*:}; LN=${LN%%:*}
     TEXT=${line#*:*:}
@@ -78,7 +70,7 @@ for PATTERN in "${RULES[@]}"; do
   done < <(SEARCH_TOOL "$PATTERN")
 done
 
-# 9) كتابة تقرير JSON
+# 9) إنشاء تقرير JSON
 {
   echo "["
   printf "%s\n" "${RESULTS_JSON[@]}" | sed '$!s/$/,/'
