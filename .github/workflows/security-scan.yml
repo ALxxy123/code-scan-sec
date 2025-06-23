@@ -1,6 +1,5 @@
 name: Security Scan
 
-# نشغّل على push إلى master وعلى أي pull_request لــ master
 on:
   push:
     branches:
@@ -11,7 +10,8 @@ on:
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    # Use your self-hosted runner on WSL
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
@@ -29,4 +29,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: security-report
-          path: output/ci-results.*
+          path: output/ci-results.log,output/ci-results.json
