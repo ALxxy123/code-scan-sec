@@ -1,0 +1,32 @@
+name: Security Scan
+
+# نشغّل على push إلى master وعلى أي pull_request لــ master
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install grep
+        run: sudo apt-get update && sudo apt-get install -y grep
+
+      - name: Run security scan
+        run: |
+          chmod +x bin/scan.sh
+          bin/scan.sh -d . -o output/ci-results.log -j output/ci-results.json
+
+      - name: Upload report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: output/ci-results.*
