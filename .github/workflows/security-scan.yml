@@ -1,11 +1,10 @@
 name: Security Scan
 
-# قل للـ runner متى يشتغل:
 on:
   push:
     branches:
-      - master    # لو رفعت للكود الأساسي
-      - ci-test   # أو لتجربة على هذا الفرع
+      - master
+      - ci-test
   pull_request:
     branches:
       - master
@@ -13,7 +12,6 @@ on:
 
 jobs:
   scan:
-    # هذا يربطه بالـ self-hosted runner على WSL
     runs-on: self-hosted
 
     steps:
