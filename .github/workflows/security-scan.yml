@@ -1,16 +1,19 @@
 name: Security Scan
 
+# قل للـ runner متى يشتغل:
 on:
   push:
     branches:
-      - master
+      - master    # لو رفعت للكود الأساسي
+      - ci-test   # أو لتجربة على هذا الفرع
   pull_request:
     branches:
       - master
+      - ci-test
 
 jobs:
   scan:
-    # Use your self-hosted runner on WSL
+    # هذا يربطه بالـ self-hosted runner على WSL
     runs-on: self-hosted
 
     steps:
