@@ -2,9 +2,6 @@ name: Security Scan
 
 on:
   pull_request:
-    paths-ignore:
-      - 'README.md'
-      - '.github/**'
 
 jobs:
   scan:
@@ -27,4 +24,3 @@ jobs:
         with:
           name: security-report
           path: output/ci-results.*
-
