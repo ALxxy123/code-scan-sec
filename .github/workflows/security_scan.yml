@@ -1,0 +1,31 @@
+name: Security Scan CI
+
+on: [push, pull_request]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Make Scripts Executable
+        run: chmod +x ./bin/scan.sh
+
+      - name: Run Security Scan
+        run: |
+          # Run the scan on the repository code
+          ./bin/scan.sh .
+          
+          # Count the number of findings in the JSON result
+          findings_count=$(jq '. | length' output/results.json)
+          echo "Scan complete. Found $findings_count potential secrets."
+          
+          # If findings are greater than 0, fail the workflow
+          if [ "$findings_count" -gt 0 ]; then
+            echo "::error::Security scan failed! Found secrets in the code. Check the report for details."
+            exit 1
+          fi
