@@ -15,12 +15,22 @@ jobs:
       - name: Make Scripts Executable
         run: chmod +x ./bin/scan.sh
 
-      - name: Run Security Scan
+      - name: Run Security Scan and Debug
         id: scan
         run: |
+          echo "--- 1. Listing all files in the repository ---"
+          ls -laR
+
+          echo "--- 2. Running the security scan ---"
           ./bin/scan.sh .
+
+          echo "--- 3. Content of the results.json file ---"
+          cat output/results.json
+          echo "--- End of results.json content ---"
+
           findings_count=$(jq '. | length' output/results.json)
           echo "Scan complete. Found $findings_count potential secrets."
+
           if [ "$findings_count" -gt 0 ]; then
             echo "::error::Security scan failed! Found secrets in the code."
             exit 1
