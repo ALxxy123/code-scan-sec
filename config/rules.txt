@@ -1,12 +1,46 @@
-API_KEY
-api_key
-apikey
-secret
-password
-token
-Authorization
-/admin
-/debug
-.env
-config.php
-credentials.json
+password\s*[:=]\s*['"][^'"]+['"];?
+token\s*[:=]\s**['"][^'"]+['"];?
+API_KEY\s*[:=]\s*['"][^'"]+['"];?
+api_key\s*[:=]\s*['"][^'"]+['"];?
+apikey\s*[:=]\s*['"][^'"]+['"];?
+access_token\s*[:=]\s*['"][^'"]+['"];?
+#[A-Za-z0-9_]{32,}
+AIza[0-9A-Za-z_-]{35}
+AKIA[0-9A-Z]{16}
+# ==================================================
+#  قواعد إضافية احترافية - Professional Ruleset
+# ==================================================
+
+# --- مفاتيح عامة (Generic Keys) ---
+# يبحث عن كلمات مثل key, secret, token متبوعة بـ 20 محرفاً أو أكثر
+(?i)(key|secret|token|password)['"]?\s*[:=]\s*['"]?([a-z0-9_\\-]{20,})['"]?
+
+# --- خدمات أمازون (AWS) ---
+# AWS Secret Key
+(?i)aws(.{0,20})?(key|secret|token)['"]?\s*[:=]\s*['"]?([a-z0-9/\\+]{40})['"]?
+# AWS MWS Auth Token
+amzn\.mws\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+
+# --- خدمات جوجل (Google Cloud & API) ---
+# Google API Key (replaces the old one)
+AIza[0-9A-Za-z\\-_]{35}
+# Google Cloud Platform API Key
+(?i)google(.{0,20})?(key|secret|token)['"]?\s*[:=]\s*['"]?([a-z0-9_\\-]{30,})['"]?
+# Google OAuth Access Token
+ya29\.[0-9A-Za-z\\-_]+
+
+# --- خدمات أخرى شائعة ---
+# GitHub Token (Personal Access Token)
+ghp_[a-zA-Z0-9]{36}
+# Stripe API Key
+sk_live_[0-9a-zA-Z]{24}
+# Slack Token (Legacy & new)
+xox[pborsa]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32}
+# Heroku API Key
+[hH][eE][rR][oO][kK][uU].{0,30}[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}
+
+# --- قواعد لملفات الإعدادات (e.g., .env) ---
+# Generic .env password
+DB_PASSWORD\s*=\s*.+
+APP_KEY\s*=\s*.+
+SECRET_KEY\s*=\s*.+

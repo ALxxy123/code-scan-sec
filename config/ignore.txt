@@ -3,3 +3,8 @@ vendor
 .git
 *.lock
 *.min.js
+# Ignore all .env.example files
+*.env.example
+
+# Ignore all Markdown files
+*.md

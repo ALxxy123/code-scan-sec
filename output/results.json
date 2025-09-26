@@ -1,0 +1,80 @@
+[
+  {
+    "file": "./test.js",
+    "line": 1,
+    "rule": "password\\s*[:=]\\s*['\"][^'\"]+['\"];?",
+    "match": "password = 'secret';"
+  },
+  {
+    "file": "./test.js",
+    "line": 2,
+    "rule": "token\\s*[:=]\\s**['\"][^'\"]+['\"];?",
+    "match": "token = 'abc123';"
+  },
+  {
+    "file": "./test.js",
+    "line": 4,
+    "rule": "token\\s*[:=]\\s**['\"][^'\"]+['\"];?",
+    "match": "token = \"ghp_ABC123DEF456\";"
+  },
+  {
+    "file": "./test.js",
+    "line": 3,
+    "rule": "API_KEY\\s*[:=]\\s*['\"][^'\"]+['\"];?",
+    "match": "API_KEY = 'AKIAEXAMPLEKEY';"
+  },
+  {
+    "file": "./test.js",
+    "line": 4,
+    "rule": "access_token\\s*[:=]\\s*['\"][^'\"]+['\"];?",
+    "match": "access_token = \"ghp_ABC123DEF456\";"
+  },
+  {
+    "file": "./tmp.secret.js",
+    "line": 3,
+    "rule": "password\\s*[:=]\\s*['\"][^'\"]+['\"];?",
+    "match": "password = 'mySuperSecretPassword123';"
+  },
+  {
+    "file": "./tmp.secret.js",
+    "line": 4,
+    "rule": "token\\s*[:=]\\s**['\"][^'\"]+['\"];?",
+    "match": "token = \"ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD\";"
+  },
+  {
+    "file": "./tmp.secret.js",
+    "line": 2,
+    "rule": "api_key\\s*[:=]\\s*['\"][^'\"]+['\"];?",
+    "match": "api_key = \"AKIAIOSFODNN7EXAMPLE\";"
+  },
+  {
+    "file": "./tmp.secret.js",
+    "line": 4,
+    "rule": "access_token\\s*[:=]\\s*['\"][^'\"]+['\"];?",
+    "match": "access_token = \"ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD\";"
+  },
+  {
+    "file": "./tmp.secret.js",
+    "line": 2,
+    "rule": "AKIA[0-9A-Z]{16}",
+    "match": "AKIAIOSFODNN7EXAMPLE"
+  },
+  {
+    "file": "./tmp.secret.js",
+    "line": 4,
+    "rule": "ghp_[a-zA-Z0-9]{36}",
+    "match": "ghp_1234567890abcdefghijklmnopqrstuvwxyz"
+  },
+  {
+    "file": "./test-project/test.js",
+    "line": 1,
+    "rule": "password\\s*[:=]\\s*['\"][^'\"]+['\"];?",
+    "match": "password = 'secret';"
+  },
+  {
+    "file": "./test-project/secret.js",
+    "line": 1,
+    "rule": "API_KEY\\s*[:=]\\s*['\"][^'\"]+['\"];?",
+    "match": "API_KEY = \"12345\";"
+  }
+]
