@@ -16,16 +16,22 @@ jobs:
         run: chmod +x ./bin/scan.sh
 
       - name: Run Security Scan
+        id: scan
         run: |
-          # Run the scan on the repository code
           ./bin/scan.sh .
-          
-          # Count the number of findings in the JSON result
           findings_count=$(jq '. | length' output/results.json)
           echo "Scan complete. Found $findings_count potential secrets."
-          
-          # If findings are greater than 0, fail the workflow
           if [ "$findings_count" -gt 0 ]; then
-            echo "::error::Security scan failed! Found secrets in the code. Check the report for details."
+            echo "::error::Security scan failed! Found secrets in the code."
             exit 1
           fi
+
+      - name: Send Slack Notification on Failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_TITLE: "🚨 Security Scan FAILED"
+          SLACK_USERNAME: "SecurityBot"
+          SLACK_MESSAGE: "Secrets were detected in repository `${{ github.repository }}` on commit `${{ github.sha }}`. Please review the workflow run for details."
+          SLACK_COLOR: 'danger'
