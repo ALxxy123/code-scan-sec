@@ -1,0 +1,47 @@
+name: Security Scan CI
+
+on: [push, pull_request]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Make Scripts Executable
+        run: chmod +x ./bin/scan.sh
+
+      - name: Run Security Scan and Debug
+        id: scan
+        run: |
+          echo "--- 1. Listing all files in the repository ---"
+          ls -laR
+
+          echo "--- 2. Running the security scan ---"
+          ./bin/scan.sh .
+
+          echo "--- 3. Content of the results.json file ---"
+          cat output/results.json
+          echo "--- End of results.json content ---"
+
+          findings_count=$(jq '. | length' output/results.json)
+          echo "Scan complete. Found $findings_count potential secrets."
+
+          if [ "$findings_count" -gt 0 ]; then
+            echo "::error::Security scan failed! Found secrets in the code."
+            exit 1
+          fi
+
+      - name: Send Slack Notification on Failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_TITLE: "🚨 Security Scan FAILED"
+          SLACK_USERNAME: "SecurityBot"
+          SLACK_MESSAGE: "Secrets were detected in repository `${{ github.repository }}` on commit `${{ github.sha }}`. Please review the workflow run for details."
+          SLACK_COLOR: 'danger'

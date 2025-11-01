@@ -1,0 +1,35 @@
+# أي متغير API_KEY في الأكواد أو Config
+(API_KEY|api_key|apikey)\s*[:=]\s*['"][^'"]+['"]
+
+# Secrets في الأكواد أو Config
+(secret|SECRET)\s*[:=]\s*['"][^'"]+['"]
+
+# أي كلمة مرور ظاهرة (في PHP أو JS)
+password\s*[:=]\s*['"][^'"]+['"]
+
+# أي Token ظاهر
+token\s*[:=]\s*['"][^'"]+['"]
+
+# Authorization header محتمل (مثل Bearer tokens)
+Authorization\s*[:=]\s*['"]Bearer [^'"]+['"]
+
+# أي path يدل على admin
+/admin\b
+
+# أي path يدل على debug
+/debug\b
+
+# أي ملف env ظاهر في نصوص أو Config
+\.env\b
+
+# محاولة استدعاء ملف Config PHP مباشرة
+config\.php\b
+
+# ملفات JSON تخص credentials
+credentials\.json\b
+
+# استخدام eval في الأكواد
+eval\s*\(
+
+# استخدام base64_decode
+base64_decode

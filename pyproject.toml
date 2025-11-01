@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "security-scan-cli"
+version = "2.1.0" # (تمت ترقية الإصدار)
+authors = [
+    { name = "Ahmed Mubaraki" }
+]
+description = "AI-Powered Interactive Security Scanner"
+requires-python = ">=3.8"
+dependencies = [
+    "rich[all]",
+    "google-generativeai",
+    "openai",
+    "typer"
+]
+
+[project.scripts]
+security-scan = "scanner:app"
+
+[tool.setuptools]
+packages = ["ai_providers"]
+py-modules = ["scanner"]

@@ -1,88 +1,118 @@
-#!/usr/bin/env bash
-#
-# bin/scan.sh – Professional code security scanner
+#!/bin/bash
 
-# 1) تحميل الدوال وطباعة INFO إن نجح
-source "$(dirname "${BASH_SOURCE[0]}")/../lib/functions.sh"
-load_config
+# This script becomes a full CLI tool
 
-# 2) القيم الافتراضية
-SCAN_DIR="."
-LOG_FILE="../output/results.log"
-JSON_FILE="../output/results.json"
+# --- إعدادات المسارات ---
+# This allows the script to find its files after installation
+export SCAN_TOOL_DIR=${SCAN_TOOL_DIR:-$(dirname "$0")}
+export SCAN_CONFIG_DIR=${SCAN_CONFIG_DIR:-$(pwd)/config}
 
-# 3) دالة عرض الاستخدام
-usage() {
-  cat <<EOF
-Usage: $0 [-d dir] [-o out.log] [-j out.json] [-h]
-  -d DIR     Directory to scan (default: .)
-  -o FILE    Plain-text log (default: output/results.log)
-  -j FILE    JSON report (default: output/results.json)
-  -h         Show help
-EOF
-  exit 1
+# --- ملفات الإعدادات ---
+RULES_FILE="$SCAN_CONFIG_DIR/rules.txt"
+IGNORE_FILE="$SCAN_CONFIG_DIR/ignore.txt"
+OUTPUT_DIR="output" # المخرجات تكون دائمًا في المجلد الحالي
+JSON_RESULT_FILE="$OUTPUT_DIR/results.json"
+
+# --- دالة طباعة المساعدة ---
+print_help() {
+    echo "Usage: security-scan [OPTIONS]"
+    echo ""
+    echo "A CLI tool to scan code for hardcoded secrets."
+    echo ""
+    echo "Options:"
+    echo "  -p, --path <dir>     Path to the directory to scan (default: current directory)"
+    echo "  -o, --output <format>  Generate report. Formats: 'md', 'html', or 'all'"
+    echo "  -r, --rules <file>     Use a custom rules file (default: $RULES_FILE)"
+    echo "  --no-ai              Disable AI verification for this run"
+    echo "  -h, --help           Show this help message"
+    echo ""
+    echo "Example: security-scan -p ../my-project -o html"
 }
 
-# 4) قراءة الخيارات
-while getopts "d:o:j:h" opt; do
-  case $opt in
-    d) SCAN_DIR="$OPTARG" ;;
-    o) LOG_FILE="$OPTARG" ;;
-    j) JSON_FILE="$OPTARG" ;;
-    *) usage ;;
-  esac
+# --- القيم الافتراضية ---
+SCAN_PATH="."
+OUTPUT_FORMAT=""
+USE_AI=true
+
+# --- تحليل الخيارات (Flags) باستخدام getopt ---
+# This is the core of the CLI logic
+TEMP=$(getopt -o p:o:r:h --long path:,output:,rules:,help,no-ai -n 'security-scan' -- "$@")
+if [ $? != 0 ]; then echo "Terminating..." >&2; exit 1; fi
+
+eval set -- "$TEMP"
+
+while true; do
+    case "$1" in
+        -p | --path) SCAN_PATH="$2"; shift 2 ;;
+        -o | --output) OUTPUT_FORMAT="$2"; shift 2 ;;
+        -r | --rules) RULES_FILE="$2"; shift 2 ;;
+        --no-ai) USE_AI=false; shift 1 ;;
+        -h | --help) print_help; exit 0 ;;
+        --) shift; break ;;
+        *) echo "Internal error!"; exit 1 ;;
+    esac
 done
 
-# 5) التحقق من وجود مجلد الفحص
-if [[ ! -d "$SCAN_DIR" ]]; then
-  log ERROR "Directory not found: $SCAN_DIR"
-  exit 1
+# --- دالة التحقق عبر الذكاء الاصطناعي (كما هي من قبل) ---
+function is_truly_a_secret() {
+    if [ "$USE_AI" = false ]; then
+        return 0 # Bypass AI check
+    fi
+    
+    local finding="$1"
+    if [ -z "$GEMINI_API_KEY" ]; then
+        echo "[AI-WARN] GEMINI_API_KEY not set. Skipping AI verification."
+        return 0
+    fi
+    echo "[AI] Verifying: \"$finding\"..."
+    local response=$(curl -s -H "Content-Type: application/json" -d '{"contents": [{"parts": [{"text": "Is this string a secret (API key, token, password)? Respond ONLY with Yes or No. String: '"$finding"'"}]}]}' "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$GEMINI_API_KEY")
+    local answer=$(echo "$response" | jq -r '.candidates[0].content.parts[0].text' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+    if [[ "$answer" == "yes" ]]; then
+        echo "[AI] Verdict: YES (Secret)"
+        return 0
+    else
+        echo "[AI] Verdict: NO (False Positive)"
+        return 1
+    fi
+}
+
+# --- محرك الفحص الرئيسي ---
+echo "[INFO] Starting AI-Powered Security Scan"
+echo "[INFO] Target path: $SCAN_PATH"
+echo "[INFO] Rules file: $RULES_FILE"
+[ "$USE_AI" = false ] && echo "[WARN] AI verification is DISABLED."
+mkdir -p "$OUTPUT_DIR"
+
+ignore_args=()
+if [ -f "$IGNORE_FILE" ]; then
+    while IFS= read -r p; do [[ -n "$p" && ! "$p" =~ ^\s*# ]] && ignore_args+=('!' '-path' "$p"); done < "$IGNORE_FILE"
 fi
 
-# 6) تهيئة مجلدات الإخراج
-mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$JSON_FILE")"
-> "$LOG_FILE"
-echo '[]' > "$JSON_FILE"
+echo "[]" > "$JSON_RESULT_FILE"
 
-log INFO "Scanning directory: $SCAN_DIR"
-log INFO "Logging to: $LOG_FILE"
-log INFO "JSON output: $JSON_FILE"
-
-# 7) اختيار أداة البحث الأسرع
-if command -v rg &>/dev/null; then
-  # ripgrep إذا موجود
-  SEARCH_TOOL() {
-    rg --no-heading --line-number --color=always \
-       $(printf -- "--glob '!%s' " "${IGNORE[@]}") \
-       "$1" "$SCAN_DIR"
-  }
-else
-  # fallback إلى grep
-  SEARCH_TOOL() {
-    grep -R --color=always \
-         --exclude-dir=$(printf "{%s}" "$(IFS=,; echo "${IGNORE[*]}")") \
-         -n "$1" "$SCAN_DIR"
-  }
-fi
-
-# 8) تنفيذ الفحص وجمع النتائج
-RESULTS_JSON=()
-for PATTERN in "${RULES[@]}"; do
-  log INFO "Pattern: $PATTERN"
-  while IFS= read -r line; do
-    echo -e "$line" | tee -a "$LOG_FILE"
-    FILE=${line%%:*}
-    LN=${line#*:}; LN=${LN%%:*}
-    TEXT=${line#*:*:}
-    RESULTS_JSON+=("{\"file\":\"$FILE\",\"line\":$LN,\"match\":\"$(echo $TEXT | sed 's/\"/\\\\\"/g')\",\"pattern\":\"$PATTERN\"}")
-  done < <(SEARCH_TOOL "$PATTERN")
+find "$SCAN_PATH" -type f -not -path '*/.git/*' -not -path '*/output/*' "${ignore_args[@]}" -print0 | while IFS= read -r -d $'\0' file; do
+    while IFS= read -r rule; do
+        if [[ -z "$rule" || "$rule" =~ ^\s*# ]]; then continue; fi
+        grep -n -o --text -E "$rule" "$file" | while IFS=: read -r line_number match_content; do
+            if [ -z "$match_content" ]; then continue; fi
+            if is_truly_a_secret "$match_content"; then
+                temp_json=$(jq -n --arg file "$file" --argjson line "$line_number" --arg rule "$rule" --arg match "$match_content" '{file: $file, line: $line, rule: $rule, match: $match}')
+                jq ". + [$temp_json]" "$JSON_RESULT_FILE" > "${JSON_RESULT_FILE}.tmp" && mv "${JSON_RESULT_FILE}.tmp" "$JSON_RESULT_FILE"
+            fi
+        done
+    done < "$RULES_FILE"
 done
 
-# 9) كتابة تقرير JSON
-{
-  echo "["
-  printf "%s\n" "${RESULTS_JSON[@]}" | sed '$!s/$/,/'
-  echo "]"
-} > "$JSON_FILE"
+echo "[INFO] Scan complete. AI-verified results saved to $JSON_RESULT_FILE"
 
-log INFO "Scan complete."
+# --- معالجة التقارير ---
+if [ -n "$OUTPUT_FORMAT" ]; then
+    echo "[INFO] Generating reports..."
+    if [[ "$OUTPUT_FORMAT" == "all" || "$OUTPUT_FORMAT" == "md" ]]; then
+        bash "$SCAN_TOOL_DIR/json-to-md.sh"
+    fi
+    if [[ "$OUTPUT_FORMAT" == "all" || "$OUTPUT_FORMAT" == "html" ]]; then
+        bash "$SCAN_TOOL_DIR/json-to-html.sh"
+    fi
+    echo "[INFO] Reports generated in $OUTPUT_DIR"
+fi

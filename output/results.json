@@ -1,3 +1,20 @@
 [
-
+    {
+        "file": "test.js",
+        "line": 4,
+        "match": "token = \"ghp_ABC123DEF456\";",
+        "rule": "token\\s*[:=]\\s*['\"][^'\"]+['\"];?"
+    },
+    {
+        "file": "tmp.secret.js",
+        "line": 3,
+        "match": "password = 'mySuperSecretPassword123';",
+        "rule": "password\\s*[:=]\\s*['\"][^'\"]+['\"];?"
+    },
+    {
+        "file": "tmp.secret.js",
+        "line": 4,
+        "match": "token = \"ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD\";",
+        "rule": "token\\s*[:=]\\s*['\"][^'\"]+['\"];?"
+    }
 ]
