@@ -1,9 +1,9 @@
-#  Security Scan Report 🛡️
+# 🛡️ Security Scan Report
 
 ## 📊 Summary
-- **Total Findings:** 2
-- **Affected Files:** 1
-- **Scan Date:** Tue Sep 23 00:19:24 +03 2025
+- **Total Findings:** 3
+- **Affected Files:** 2
+- **Scan Date:** 2025-11-01 21:15:06
 
 ---
 
@@ -11,5 +11,6 @@
 
 | File | Line | Rule | Match |
 |------|------|------|-------|
-| /mnt/c/Graduationproject/system_Backend/.env | 27 | `DB_PASSWORD\s*=\s*.+` | `DB_PASSWORD=             # غالبًا فاضي، إذا عندك باسورد للـ root ضيفه هنا` |
-| /mnt/c/Graduationproject/system_Backend/.env | 3 | `APP_KEY\s*=\s*.+` | `APP_KEY=base64:+bTnfH4fv9eQo1wTLRwqaQot8/8Y6Uq+DXX4pLRg9mM=` |
+| `test.js` | 4 | `token\s*[:=]\s*['"][^'"]+['"];?` | `token = "ghp_ABC123DEF456";` |
+| `tmp.secret.js` | 3 | `password\s*[:=]\s*['"][^'"]+['"];?` | `password = 'mySuperSecretPassword123';` |
+| `tmp.secret.js` | 4 | `token\s*[:=]\s*['"][^'"]+['"];?` | `token = "ghp_1234567890abcdefghijklmnopqrstuvwxyzABCD";` |
