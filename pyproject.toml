@@ -1,25 +1,86 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=65.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "security-scan-cli"
-version = "2.1.0" # (تمت ترقية الإصدار)
+version = "3.0.0"
 authors = [
     { name = "Ahmed Mubaraki" }
 ]
-description = "AI-Powered Interactive Security Scanner"
+description = "Enhanced AI-Powered Security Scanner with Vulnerability Detection"
+readme = "README.md"
 requires-python = ">=3.8"
-dependencies = [
-    "rich[all]",
-    "google-generativeai",
-    "openai",
-    "typer"
+license = {text = "MIT"}
+keywords = ["security", "scanner", "secrets", "vulnerabilities", "ai", "owasp"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
 ]
+
+dependencies = [
+    "typer>=0.9.0",
+    "rich[all]>=13.0.0",
+    "pyyaml>=6.0",
+    "google-generativeai>=0.3.0",
+    "openai>=1.0.0",
+    "anthropic>=0.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ALxxy123/code-scan-sec"
+Documentation = "https://github.com/ALxxy123/code-scan-sec#readme"
+Repository = "https://github.com/ALxxy123/code-scan-sec"
+Issues = "https://github.com/ALxxy123/code-scan-sec/issues"
 
 [project.scripts]
 security-scan = "scanner:app"
 
 [tool.setuptools]
 packages = ["ai_providers"]
-py-modules = ["scanner"]
+py-modules = [
+    "scanner",
+    "config",
+    "logger",
+    "vulnerability_scanner",
+    "report_generator"
+]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=. --cov-report=html --cov-report=term"
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

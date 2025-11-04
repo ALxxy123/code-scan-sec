@@ -1,490 +1,882 @@
+"""
+Enhanced AI-Powered Security Scanner.
+
+This is a comprehensive security scanner that detects:
+- Hardcoded secrets, API keys, passwords, and credentials
+- Security vulnerabilities (SQL Injection, XSS, Command Injection, etc.)
+- Uses AI verification to reduce false positives
+
+Version: 3.0.0
+Author: Ahmed Mubaraki
+"""
+
+from typing import List, Dict, Optional, Tuple
 import typer
 import re
 import os
 import time
-import json
 import math
-import webbrowser
-import subprocess
-import google.generativeai as genai
+import sys
 from pathlib import Path
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress
-from rich.spinner import Spinner
-from datetime import datetime
-import sys
-import stat
-from rich.prompt import Prompt, Confirm
+from rich.progress import Progress, track
 from rich.panel import Panel
 from rich.text import Text
+from rich.prompt import Prompt, Confirm
+from datetime import datetime
+import subprocess
+import stat
 
-# --- (استيراد المزودين) ---
+# Import new enhanced modules
+from config import get_config, reload_config
+from logger import get_logger
+from vulnerability_scanner import VulnerabilityScanner, scan_for_vulnerabilities
+from report_generator import ReportGenerator
+
+# Import AI providers
 from ai_providers.gemini_provider import GeminiProvider
 from ai_providers.openai_provider import OpenAIProvider
+from ai_providers.claude_provider import ClaudeProvider
 
-# --- الإعدادات والتهيئة ---
+# Initialize
 console = Console()
-app = typer.Typer(help="🛡️ AI-Powered Security Scanner by Ahmed Mubaraki 🛡️")
+logger = get_logger()
+app = typer.Typer(help="🛡️ Enhanced AI-Powered Security Scanner 🛡️")
 
-OUTPUT_DIR = Path("output")
+# Configuration paths
 APP_CONFIG_DIR = Path.home() / ".security-scan"
 RULES_FILE = APP_CONFIG_DIR / "rules.txt"
 IGNORE_FILE = APP_CONFIG_DIR / "ignore.txt"
-ENTROPY_THRESHOLD = 3.5 
 
+# AI Providers registry
 AI_PROVIDERS = {
     "gemini": GeminiProvider,
     "openai": OpenAIProvider,
+    "claude": ClaudeProvider,
 }
 
 DEFAULT_RULES = """
-# Default rules file for Security Scan
-# Add your custom Regex patterns below
+# Default rules for secret detection
 password\s*[:=]\s*['"][^'"]+['"];?
 token\s*[:=]\s*['"][^'"]+['"];?
 API_KEY\s*[:=]\s*['"][^'"]+['"];?
 AKIA[0-9A-Z]{16}
 AIza[0-9A-Za-z\\-_]{35}
 ghp_[a-zA-Z0-9]{36}
+sk-[a-zA-Z0-9]{48}
 """
 
-# --- (جميع الدوال المساعدة ودوال التقارير كما هي) ---
-def initialize_config():
+
+def initialize_config() -> None:
+    """
+    Initialize configuration directory and files on first run.
+    
+    Creates:
+        - Config directory at ~/.security-scan
+        - Default rules file
+        - Default ignore patterns file
+    """
+    logger.info("Initializing configuration...")
+    
     if not APP_CONFIG_DIR.exists():
-        console.print(f"[yellow]First run detected. Creating config directory at: {APP_CONFIG_DIR}[/yellow]")
-        APP_CONFIG_DIR.mkdir(parents=True)
+        console.print(f"[yellow]First run detected. Creating config directory: {APP_CONFIG_DIR}[/yellow]")
+        APP_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Created config directory: {APP_CONFIG_DIR}")
+    
     if not RULES_FILE.exists():
-        console.print(f"[yellow]No 'rules.txt' found. Creating default rules file...[/yellow]")
-        with open(RULES_FILE, "w") as f: f.write(DEFAULT_RULES)
+        console.print("[yellow]Creating default rules file...[/yellow]")
+        with open(RULES_FILE, "w", encoding="utf-8") as f:
+            f.write(DEFAULT_RULES)
+        logger.info(f"Created rules file: {RULES_FILE}")
+    
     if not IGNORE_FILE.exists():
-        console.print(f"[yellow]No 'ignore.txt' found. Creating empty ignore file...[/yellow]")
-        with open(IGNORE_FILE, "w") as f: f.write("# Add files or patterns to ignore, e.g.: *.log\n")
+        console.print("[yellow]Creating default ignore file...[/yellow]")
+        with open(IGNORE_FILE, "w", encoding="utf-8") as f:
+            f.write("# Add files or patterns to ignore\n*.log\n*.tmp\n")
+        logger.info(f"Created ignore file: {IGNORE_FILE}")
 
-def load_rules() -> list[re.Pattern]:
+
+def load_rules() -> List[re.Pattern]:
+    """
+    Load regex patterns from rules file.
+    
+    Returns:
+        List[re.Pattern]: Compiled regex patterns
+        
+    Raises:
+        SystemExit: If rules file doesn't exist
+    """
     if not RULES_FILE.exists():
-        console.print(f"[bold red]Error: Config files not found at {RULES_FILE}[/bold red]")
-        console.print("Please run [bold]'security-scan interactive'[/bold] once to create them.")
+        console.print(f"[bold red]Error: Rules file not found at {RULES_FILE}[/bold red]")
+        console.print("Please run [bold]'security-scan interactive'[/bold] to create it.")
+        logger.error(f"Rules file not found: {RULES_FILE}")
         sys.exit(1)
-    with open(RULES_FILE, "r") as f:
-        return [
-            re.compile(line) for line in f.read().splitlines() 
-            if line and not line.strip().startswith("#")
-        ]
+    
+    try:
+        with open(RULES_FILE, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+            patterns = [
+                re.compile(line.strip())
+                for line in lines
+                if line.strip() and not line.strip().startswith("#")
+            ]
+        logger.info(f"Loaded {len(patterns)} rules from {RULES_FILE}")
+        return patterns
+    except re.error as e:
+        logger.error(f"Invalid regex pattern in rules file: {e}")
+        console.print(f"[bold red]Error: Invalid regex in rules file: {e}[/bold red]")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Failed to load rules: {e}")
+        console.print(f"[bold red]Error loading rules: {e}[/bold red]")
+        sys.exit(1)
 
-def load_ignore_patterns() -> list[str]:
+
+def load_ignore_patterns() -> List[str]:
+    """
+    Load ignore patterns from ignore file.
+    
+    Returns:
+        List[str]: List of patterns to ignore
+    """
     if not IGNORE_FILE.exists():
         return []
-    with open(IGNORE_FILE, "r") as f:
-        return [
-            p.strip() for p in f.read().splitlines() 
-            if p.strip() and not p.startswith("#")
-        ]
+    
+    try:
+        with open(IGNORE_FILE, "r", encoding="utf-8") as f:
+            patterns = [
+                p.strip()
+                for p in f.read().splitlines()
+                if p.strip() and not p.startswith("#")
+            ]
+        logger.info(f"Loaded {len(patterns)} ignore patterns")
+        return patterns
+    except Exception as e:
+        logger.warning(f"Failed to load ignore patterns: {e}")
+        return []
+
 
 def calculate_entropy(text: str) -> float:
-    if not text: return 0.0
+    """
+    Calculate Shannon entropy of text for randomness detection.
+    
+    Higher entropy indicates more randomness (likely a real secret).
+    
+    Args:
+        text: Text to calculate entropy for
+        
+    Returns:
+        float: Entropy value (0.0 to ~8.0 for ASCII)
+    """
+    if not text:
+        return 0.0
+    
+    # Calculate character frequency probabilities
     probabilities = [text.count(c) / len(text) for c in set(text)]
+    
+    # Shannon entropy formula
     entropy = -sum(p * math.log2(p) for p in probabilities if p > 0)
+    
     return entropy
 
+
 def extract_value_for_entropy(match_string: str) -> str:
+    """
+    Extract the actual value from a pattern match for entropy calculation.
+    
+    Args:
+        match_string: Matched string from regex
+        
+    Returns:
+        str: Extracted value
+    """
+    # Try to extract quoted value
     quoted_match = re.search(r"['\"](.+?)['\"]", match_string)
-    if quoted_match: return quoted_match.group(1)
+    if quoted_match:
+        return quoted_match.group(1)
+    
+    # Try to extract value after '='
     if '=' in match_string:
         parts = match_string.split('=', 1)
-        if len(parts) > 1: return parts[1].strip()
+        if len(parts) > 1:
+            return parts[1].strip().strip('\'";')
+    
     return match_string
 
-def write_text_report(findings: list):
-    report_path = OUTPUT_DIR / "results.txt"
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write("--- AI-Verified Security Scan Results ---\n\n")
-        for i, finding in enumerate(findings, 1):
-            f.write(f"Finding #{i}:\n")
-            f.write(f"  File:  {finding['file']}:{finding['line']}\n")
-            f.write(f"  Rule:  {finding['rule']}\n")
-            f.write(f"  Match: {finding['match']}\n")
-            f.write("---\n")
-    return report_path
 
-def write_json_report(findings: list):
-    report_path = OUTPUT_DIR / "results.json"
-    with open(report_path, "w", encoding="utf-8") as f:
-        json.dump(findings, f, indent=4)
-    return report_path
+def collect_files(
+    path: str,
+    ignore_patterns: Optional[List[str]] = None
+) -> List[Path]:
+    """
+    Collect all files to scan from given path.
+    
+    Args:
+        path: Directory or file path to scan
+        ignore_patterns: Patterns to ignore
+        
+    Returns:
+        List[Path]: List of files to scan
+    """
+    logger.info(f"Collecting files from: {path}")
+    target_path = Path(path)
+    
+    if target_path.is_file():
+        return [target_path]
+    
+    if not target_path.is_dir():
+        logger.error(f"Invalid path: {path}")
+        return []
+    
+    # Default ignore patterns
+    default_ignores = [
+        '**/.git/**',
+        '**/venv/**',
+        '**/__pycache__/**',
+        '**/node_modules/**',
+        '**/output/**',
+        '**/.venv/**',
+        '**/dist/**',
+        '**/build/**'
+    ]
+    
+    all_ignores = default_ignores + (ignore_patterns or [])
+    
+    # Collect all files
+    all_files = list(target_path.rglob("*"))
+    files_to_scan = []
+    
+    for file_path in all_files:
+        if not file_path.is_file():
+            continue
+            
+        # Check ignore patterns
+        should_ignore = False
+        for pattern in all_ignores:
+            if file_path.match(pattern):
+                should_ignore = True
+                break
+        
+        if not should_ignore:
+            files_to_scan.append(file_path)
+    
+    logger.info(f"Found {len(files_to_scan)} files to scan")
+    return files_to_scan
 
-def write_md_report(findings: list, affected_files: int):
-    report_path = OUTPUT_DIR / "report.md"
-    scan_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write("# 🛡️ Security Scan Report\n\n")
-        f.write("## 📊 Summary\n")
-        f.write(f"- **Total Findings:** {len(findings)}\n")
-        f.write(f"- **Affected Files:** {affected_files}\n")
-        f.write(f"- **Scan Date:** {scan_date}\n\n---\n\n")
-        f.write("## 📄 Details\n\n")
-        f.write("| File | Line | Rule | Match |\n")
-        f.write("|------|------|------|-------|\n")
-        for finding in findings:
-            f.write(f"| `{finding['file']}` | {finding['line']} | `{finding['rule']}` | `{finding['match']}` |\n")
-    return report_path
 
-def write_html_report(findings: list, affected_files: int):
-    report_path = OUTPUT_DIR / "report.html"
-    scan_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    rows_html = ""
-    for finding in findings:
-        rows_html += f"<tr><td><code>{finding['file']}</code></td><td>{finding['line']}</td><td><code>{finding['rule']}</code></td><td><code>{finding['match']}</code></td></tr>\n"
-    html_template = f"""
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Security Scan Report</title>
-<style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 2em; background-color: #f4f4f9; color: #333; }}
-    .container {{ max-width: 1200px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-    h1, h2 {{ color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
-    .summary {{ background-color: #ecf0f1; padding: 1em; border-radius: 5px; display: flex; justify-content: space-around; }}
-    .summary-item {{ text-align: center; }} .summary-item .value {{ font-size: 2em; font-weight: bold; color: #e74c3c; }}
-    table {{ width: 100%; border-collapse: collapse; margin-top: 2em; }}
-    th, td {{ padding: 12px; border: 1px solid #ddd; text-align: left; word-break: break-all; }}
-    thead {{ background-color: #3498db; color: white; }}
-    tbody tr:nth-child(even) {{ background-color: #f2f2f2; }}
-    code {{ background-color: #e4e4e4; padding: 2px 4px; border-radius: 3px; font-family: monospace; }}
-</style></head><body><div class="container">
-<h1>🛡️ Security Scan Report</h1><h2>📊 Summary</h2>
-<div class="summary">
-    <div class="summary-item"><span>Total Findings</span><div class="value">{len(findings)}</div></div>
-    <div class="summary-item"><span>Affected Files</span><div class="value">{affected_files}</div></div>
-</div>
-<p style="text-align:center; margin-top:1em; color:#777;">Scan Date: {scan_date}</p>
-<h2>📄 Details</h2>
-<table><thead><tr><th>File</th><th>Line</th><th>Rule</th><th>Match</th></tr></thead>
-<tbody>{rows_html}</tbody></table></div></body></html>
-"""
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(html_template)
-    return report_path
-
-def is_wsl() -> bool:
-    return "WSL_DISTRO_NAME" in os.environ
-
-def open_browser(file_path: Path):
-    try:
-        url = f"file://{file_path.resolve()}"
-        if is_wsl():
-            windows_path = subprocess.check_output(["wslpath", "-w", str(file_path.resolve())]).decode("utf-8").strip()
-            subprocess.run(["explorer.exe", windows_path], check=True)
-        else:
-            webbrowser.open(url)
-        console.print(f"\n[bold green]Opening report in your browser...[/bold green]")
-    except Exception as e:
-        console.print(f"\n[bold red]Error opening browser:[/bold red] {e}")
-        console.print(f"You can open the file manually at: {url}")
-
-# --- (هنا الإصلاح) ---
-# تم تعديل هذه الدالة لتقبل "quiet" و "from_hook"
-def run_scan(path: str, no_ai: bool, ai_provider: str, quiet: bool, from_hook: bool) -> list:
-    if not quiet:
-        console.rule("[bold blue]Starting AI-Powered Security Scan[/bold blue]")
-        console.print(f"Target Path: [cyan]{path}[/cyan]")
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    ai_client = None
-    if not no_ai:
-        if ai_provider in AI_PROVIDERS:
-            ProviderClass = AI_PROVIDERS[ai_provider]
-            ai_client = ProviderClass()
-            if not ai_client.initialize(quiet=quiet):
-                ai_client = None
-                no_ai = True
-        else:
-            if not quiet: console.print(f"[bold red]Error: AI provider '{ai_provider}' not found. Disabling AI.[/bold red]")
-            no_ai = True
-
-    if not quiet:
-        with console.status("[bold green]Loading rules and ignore patterns...[/bold green]", spinner="dots"):
-            rules = load_rules()
-            ignore_patterns = load_ignore_patterns()
-        console.print(f"Loaded [bold green]{len(rules)}[/bold green] rules.")
-    else:
-        rules = load_rules()
-        ignore_patterns = load_ignore_patterns()
-
-    if not quiet:
-        with console.status("[bold green]Finding files...[/bold green]", spinner="dots8Bit") as status:
-            target_path = Path(path)
-            all_files = list(target_path.rglob("*"))
-            files_to_scan = [f for f in all_files if f.is_file() and '.git' not in str(f) and 'venv' not in str(f) and str(OUTPUT_DIR) not in str(f)]
-            status.update(f"[bold green]Found {len(files_to_scan)} files to scan.[/bold green]")
-    else:
-        target_path = Path(path)
-        all_files = list(target_path.rglob("*"))
-        files_to_scan = [f for f in all_files if f.is_file() and '.git' not in str(f) and 'venv' not in str(f) and str(OUTPUT_DIR) not in str(f)]
-
+def scan_for_secrets(
+    files: List[Path],
+    rules: List[re.Pattern],
+    quiet: bool = False
+) -> List[Dict]:
+    """
+    Scan files for potential secrets using regex patterns.
+    
+    Args:
+        files: List of files to scan
+        rules: Compiled regex patterns
+        quiet: Suppress progress output
+        
+    Returns:
+        List[Dict]: List of potential findings
+    """
+    logger.info(f"Scanning {len(files)} files for secrets...")
     potential_findings = []
-    if not quiet:
-        console.print("\nScanning files:")
-        with Progress() as progress:
-            task = progress.add_task("[cyan]Scanning...", total=len(files_to_scan))
-            for file_path in files_to_scan:
-                progress.update(task, advance=1, description=f"[cyan]Scanning {file_path.name}[/cyan]")
-                try:
-                    with open(file_path, "r", encoding="utf-8") as file:
-                        for line_num, line in enumerate(file, 1):
-                            for rule in rules:
-                                match = rule.search(line)
-                                if match:
-                                    potential_findings.append({"file": str(file_path), "line": line_num, "match": match.group(0).strip(), "rule": rule.pattern})
-                                    break
-                except Exception: pass
-    else:
-        for file_path in files_to_scan:
+    
+    if quiet:
+        # Silent mode
+        for file_path in files:
             try:
-                with open(file_path, "r", encoding="utf-8") as file:
-                    for line_num, line in enumerate(file, 1):
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line_num, line in enumerate(f, 1):
                         for rule in rules:
                             match = rule.search(line)
                             if match:
-                                potential_findings.append({"file": str(file_path), "line": line_num, "match": match.group(0).strip(), "rule": rule.pattern})
-                                break
-            except Exception: pass
-
-    findings_for_ai = []
-    final_findings = [] 
-    if not no_ai:
-        if not quiet: console.print("\n[bold blue]Pre-filtering findings with Entropy Check...[/bold blue]")
-        for f in potential_findings:
-            value_to_check = extract_value_for_entropy(f['match'])
-            entropy = calculate_entropy(value_to_check)
-            if entropy > ENTROPY_THRESHOLD:
-                findings_for_ai.append(f)
-                if not quiet: console.print(f"[Entropy] HIGH ({entropy:.2f}) -> Queued for AI: {f['match'][:20]}...")
-            else:
-                if not quiet: console.print(f"[Entropy] LOW ({entropy:.2f})  -> Ignored (Simple): {f['match'][:20]}...")
+                                potential_findings.append({
+                                    "file": str(file_path),
+                                    "line": line_num,
+                                    "match": match.group(0).strip(),
+                                    "rule": rule.pattern
+                                })
+                                break  # One match per line
+            except Exception as e:
+                logger.debug(f"Failed to scan {file_path}: {e}")
     else:
-        final_findings = potential_findings 
+        # With progress bar
+        console.print("\n[bold blue]Scanning files for secrets...[/bold blue]")
+        for file_path in track(files, description="[cyan]Scanning..."):
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line_num, line in enumerate(f, 1):
+                        for rule in rules:
+                            match = rule.search(line)
+                            if match:
+                                potential_findings.append({
+                                    "file": str(file_path),
+                                    "line": line_num,
+                                    "match": match.group(0).strip(),
+                                    "rule": rule.pattern
+                                })
+                                break
+            except Exception as e:
+                logger.debug(f"Failed to scan {file_path}: {e}")
+    
+    logger.info(f"Found {len(potential_findings)} potential secrets")
+    return potential_findings
 
-    if not no_ai and findings_for_ai:
-        if not quiet: console.print(f"\n[bold yellow]Verifying high-entropy findings with {ai_provider}...[/bold yellow]")
-        with console.status("[bold yellow]Communicating with AI...[/bold yellow]", spinner="moon"):
-            for finding in findings_for_ai:
-                if ai_client.verify(finding["match"], quiet=quiet):
-                    final_findings.append(finding) 
 
-    if not quiet: console.print("\n[bold green]✅ Scan Complete![/bold green]")
-    return final_findings
-
-def print_welcome_banner():
-    console.clear() 
-    ascii_art = r"""
- ██████╗ ██████╗  █████╗ ███╗   ██╗███╗   ██╗███████╗██████╗ 
-██╔════╝ ██╔══██╗██╔══██╗████╗  ██║████╗  ██║██╔════╝██╔══██╗
-╚█████╗  ██████╔╝███████║██╔██╗ ██║██╔██╗ ██║█████╗  ██████╔╝
- ╚═══██╗ ██╔══██╗██╔══██║██║╚██╗██║██║╚██╗██║██╔══╝  ██╔══██╗
-██████╔╝ ██║  ██║██║  ██║██║ ╚████║██║ ╚████║███████╗██║  ██║
-╚═════╝  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
+def filter_by_entropy(
+    findings: List[Dict],
+    threshold: float = 3.5,
+    quiet: bool = False
+) -> List[Dict]:
     """
+    Filter findings by entropy threshold.
+    
+    Args:
+        findings: List of findings
+        threshold: Entropy threshold
+        quiet: Suppress output
+        
+    Returns:
+        List[Dict]: High-entropy findings
+    """
+    logger.info(f"Filtering findings by entropy (threshold: {threshold})...")
+    high_entropy_findings = []
+    
+    if not quiet:
+        console.print(f"\n[bold blue]Filtering by entropy (threshold: {threshold})...[/bold blue]")
+    
+    for finding in findings:
+        value = extract_value_for_entropy(finding['match'])
+        entropy = calculate_entropy(value)
+        
+        if entropy > threshold:
+            high_entropy_findings.append(finding)
+            if not quiet:
+                console.print(
+                    f"  [green]✓[/green] HIGH entropy ({entropy:.2f}): "
+                    f"{finding['match'][:40]}..."
+                )
+        elif not quiet:
+            console.print(
+                f"  [dim]✗ LOW entropy ({entropy:.2f}): "
+                f"{finding['match'][:40]}...[/dim]"
+            )
+    
+    logger.info(f"Filtered to {len(high_entropy_findings)} high-entropy findings")
+    return high_entropy_findings
+
+
+def verify_with_ai(
+    findings: List[Dict],
+    ai_provider_name: str,
+    quiet: bool = False
+) -> List[Dict]:
+    """
+    Verify findings using AI provider.
+    
+    Args:
+        findings: List of findings to verify
+        ai_provider_name: Name of AI provider to use
+        quiet: Suppress output
+        
+    Returns:
+        List[Dict]: Verified findings
+    """
+    if ai_provider_name not in AI_PROVIDERS:
+        logger.error(f"Unknown AI provider: {ai_provider_name}")
+        return findings
+    
+    logger.info(f"Verifying {len(findings)} findings with {ai_provider_name}...")
+    
+    # Initialize AI provider
+    ProviderClass = AI_PROVIDERS[ai_provider_name]
+    ai_client = ProviderClass()
+    
+    if not ai_client.initialize():
+        logger.warning("AI provider initialization failed, skipping verification")
+        return findings
+    
+    verified_findings = []
+    
+    if not quiet:
+        console.print(f"\n[bold yellow]Verifying with {ai_provider_name} AI...[/bold yellow]")
+    
+    for finding in track(findings, description="[yellow]Verifying...", disable=quiet):
+        try:
+            is_real = ai_client.verify(finding['match'])
+            finding['ai_verified'] = is_real
+            
+            if is_real:
+                verified_findings.append(finding)
+                if not quiet:
+                    console.print(f"  [red]✗ REAL SECRET:[/red] {finding['match'][:40]}...")
+            elif not quiet:
+                console.print(f"  [green]✓ False positive:[/green] {finding['match'][:40]}...")
+        except Exception as e:
+            logger.error(f"AI verification error: {e}")
+            finding['ai_verified'] = None
+            verified_findings.append(finding)  # Include on error to be safe
+    
+    logger.info(f"AI verified {len(verified_findings)} real secrets")
+    return verified_findings
+
+
+def run_comprehensive_scan(
+    path: str,
+    enable_ai: bool = True,
+    ai_provider: str = "gemini",
+    enable_vulnerabilities: bool = True,
+    quiet: bool = False,
+    from_hook: bool = False
+) -> Tuple[List[Dict], List, Dict]:
+    """
+    Run comprehensive security scan including secrets and vulnerabilities.
+    
+    Args:
+        path: Path to scan
+        enable_ai: Enable AI verification
+        ai_provider: AI provider to use
+        enable_vulnerabilities: Enable vulnerability scanning
+        quiet: Suppress output
+        from_hook: Running from git hook
+        
+    Returns:
+        Tuple[List[Dict], List, Dict]: (secret_findings, vulnerabilities, vuln_stats)
+    """
+    config = get_config()
+    
+    if not quiet and not from_hook:
+        console.rule("[bold blue]🛡️  Security Scan Started[/bold blue]")
+        console.print(f"📂 Target: [cyan]{path}[/cyan]")
+        console.print(f"🤖 AI Verification: [cyan]{'Enabled' if enable_ai else 'Disabled'}[/cyan]")
+        console.print(f"🐛 Vulnerability Scan: [cyan]{'Enabled' if enable_vulnerabilities else 'Disabled'}[/cyan]\n")
+    
+    logger.info(f"Starting scan: path={path}, ai={enable_ai}, vuln={enable_vulnerabilities}")
+    
+    # Load rules and patterns
+    rules = load_rules()
+    ignore_patterns = load_ignore_patterns()
+    
+    # Collect files
+    files = collect_files(path, ignore_patterns)
+    
+    if not files:
+        logger.warning("No files found to scan")
+        if not quiet:
+            console.print("[yellow]No files found to scan[/yellow]")
+        return [], [], {}
+    
+    # Scan for secrets
+    potential_findings = scan_for_secrets(files, rules, quiet)
+    
+    # Filter by entropy
+    entropy_threshold = config.scan.entropy_threshold
+    high_entropy_findings = filter_by_entropy(potential_findings, entropy_threshold, quiet)
+    
+    # AI verification
+    final_findings = []
+    if enable_ai and high_entropy_findings:
+        final_findings = verify_with_ai(high_entropy_findings, ai_provider, quiet)
+    else:
+        final_findings = high_entropy_findings
+    
+    # Vulnerability scanning
+    vulnerabilities = []
+    vuln_stats = {}
+    if enable_vulnerabilities:
+        if not quiet:
+            console.print("\n[bold blue]🐛 Scanning for vulnerabilities...[/bold blue]")
+        
+        try:
+            vulnerabilities, vuln_stats = scan_for_vulnerabilities(
+                path,
+                min_severity=config.vulnerabilities.severity_levels[0]
+                    if config.vulnerabilities.severity_levels else "low"
+            )
+            
+            if not quiet:
+                console.print(
+                    f"[green]Found {len(vulnerabilities)} vulnerabilities[/green] "
+                    f"([red]{vuln_stats.get('critical_and_high', 0)} critical/high[/red])"
+                )
+        except Exception as e:
+            logger.error(f"Vulnerability scan failed: {e}")
+            if not quiet:
+                console.print(f"[yellow]Warning: Vulnerability scan failed: {e}[/yellow]")
+    
+    if not quiet and not from_hook:
+        console.rule("[bold green]✅ Scan Complete[/bold green]")
+    
+    logger.info(
+        f"Scan complete: {len(final_findings)} secrets, "
+        f"{len(vulnerabilities)} vulnerabilities"
+    )
+    
+    return final_findings, vulnerabilities, vuln_stats
+
+
+def generate_reports(
+    findings: List[Dict],
+    vulnerabilities: List,
+    vuln_stats: Dict,
+    formats: List[str] = None,
+    output_dir: str = "output",
+    open_browser: bool = True
+) -> Dict[str, Path]:
+    """
+    Generate security scan reports in multiple formats.
+    
+    Args:
+        findings: Secret findings
+        vulnerabilities: Vulnerability findings
+        vuln_stats: Vulnerability statistics
+        formats: Report formats to generate
+        output_dir: Output directory
+        open_browser: Open HTML report in browser
+        
+    Returns:
+        Dict[str, Path]: Generated report paths
+    """
+    logger.info(f"Generating reports: formats={formats}")
+    config = get_config()
+    
+    if formats is None:
+        formats = config.report.default_formats
+    
+    generator = ReportGenerator(output_dir)
+    report_paths = {}
+    
+    # Calculate affected files
+    affected_files = len(set(f['file'] for f in findings))
+    if vulnerabilities:
+        affected_files += len(set(v.file_path for v in vulnerabilities))
+    
+    # Generate requested formats
+    if "text" in formats:
+        report_paths["text"] = generator.write_text_report(findings, vulnerabilities)
+    
+    if "json" in formats:
+        report_paths["json"] = generator.write_json_report(findings, vulnerabilities, vuln_stats)
+    
+    if "markdown" in formats:
+        report_paths["markdown"] = generator.write_md_report(
+            findings, affected_files, vulnerabilities, vuln_stats
+        )
+    
+    if "html" in formats:
+        html_path = generator.write_html_report(
+            findings, affected_files, vulnerabilities, vuln_stats
+        )
+        report_paths["html"] = html_path
+        
+        if open_browser and config.report.auto_open_browser:
+            generator.open_in_browser(html_path)
+    
+    logger.info(f"Generated {len(report_paths)} reports")
+    return report_paths
+
+
+def print_welcome_banner() -> None:
+    """Print welcome banner for interactive mode."""
+    console.clear()
+    
+    ascii_art = r"""
+ ███████╗███████╗ ██████╗██╗   ██╗██████╗ ██╗████████╗██╗   ██╗
+ ██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██║╚══██╔══╝╚██╗ ██╔╝
+ ███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║    ╚████╔╝ 
+ ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║     ╚██╔╝  
+ ███████║███████╗╚██████╗╚██████╔╝██║  ██║██║   ██║      ██║   
+ ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝   
+    """
+    
     title = Text(ascii_art, style="bold magenta", justify="center")
-    subtitle = Text("AI - P O W E R E D   S E C U R I T Y   S C A N N E R", style="bold blue", justify="center")
-    developed_by = Text("\nDeveloped by Ahmed Mubaraki", style="dim italic", justify="center")
+    subtitle = Text(
+        "E N H A N C E D   S E C U R I T Y   S C A N N E R   v3.0",
+        style="bold blue",
+        justify="center"
+    )
+    developed_by = Text(
+        "\nDeveloped by Ahmed Mubaraki\nPowered by AI & Advanced Vulnerability Detection",
+        style="dim italic",
+        justify="center"
+    )
+    
     panel_content = Text.assemble(title, "\n", subtitle, developed_by)
-    console.print(Panel(panel_content, padding=(1, 4), expand=False, border_style="dim"))
-    with console.status("[bold green]Initializing engine...", spinner="dots8Bit"):
-        initialize_config() 
-        time.sleep(1)
-    console.print("\nWelcome to the interactive scanner.\n")
+    console.print(Panel(panel_content, padding=(1, 4), expand=False, border_style="magenta"))
+    
+    # Initialize config
+    with console.status("[bold green]Initializing...", spinner="dots8Bit"):
+        initialize_config()
+        time.sleep(0.5)
+    
+    console.print()
+
+
+def install_git_hook() -> bool:
+    """
+    Install pre-commit git hook for automatic scanning.
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Check if in git repo
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        
+        if result.returncode != 0:
+            console.print("[red]Error: Not a git repository[/red]")
+            logger.error("Not a git repository")
+            return False
+        
+        git_dir = Path(result.stdout.strip())
+        hooks_dir = git_dir / "hooks"
+        hooks_dir.mkdir(exist_ok=True)
+        
+        hook_path = hooks_dir / "pre-commit"
+        
+        # Hook script content
+        hook_content = f"""#!/bin/sh
+# Auto-generated security scanner pre-commit hook
+
+echo "🛡️  Running security scan..."
+
+security-scan scan --path . --no-ai --output text --from-hook
+
+if [ $? -ne 0 ]; then
+    echo "❌ Security scan found issues!"
+    echo "Review the findings and fix them before committing."
+    echo "To bypass this check (not recommended): git commit --no-verify"
+    exit 1
+fi
+
+echo "✅ Security scan passed!"
+exit 0
+"""
+        
+        # Write hook
+        with open(hook_path, "w", encoding="utf-8") as f:
+            f.write(hook_content)
+        
+        # Make executable
+        hook_path.chmod(hook_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        
+        console.print(f"[green]✓ Git pre-commit hook installed at: {hook_path}[/green]")
+        logger.info(f"Installed git hook: {hook_path}")
+        return True
+        
+    except Exception as e:
+        console.print(f"[red]Failed to install git hook: {e}[/red]")
+        logger.error(f"Failed to install git hook: {e}")
+        return False
+
+
+# ============================================================================
+# CLI COMMANDS
+# ============================================================================
 
 @app.command()
 def interactive():
     """
-    Starts the interactive (TUI) mode to guide you through a scan.
+    Start interactive wizard mode for guided scanning.
     """
-    while True:
-        print_welcome_banner()
-        use_ai = Confirm.ask("Do you want to use AI to verify results (reduces false positives)?", default=True)
-        ai_provider = "gemini" 
-        if use_ai:
-            ai_provider = Prompt.ask(
-                "Which AI provider do you want to use?",
-                choices=["gemini", "openai"],
-                default="gemini"
-            )
-            key_name = f"{ai_provider.upper()}_API_KEY"
-            api_key = Prompt.ask(
-                f"Please enter your [bold yellow]{key_name}[/bold yellow]",
-                password=True
-            )
-            os.environ[key_name] = api_key
-        scan_path = Prompt.ask(
-            "Enter the path to the project you want to scan",
-            default="."
+    print_welcome_banner()
+    
+    console.print("[bold]Welcome to Interactive Mode![/bold]\n")
+    console.print("This wizard will guide you through the security scan process.\n")
+    
+    # Ask about AI verification
+    enable_ai = Confirm.ask("Enable AI verification (reduces false positives)?", default=True)
+    
+    ai_provider = "gemini"
+    if enable_ai:
+        console.print("\n[bold]Available AI Providers:[/bold]")
+        console.print("  1. Gemini (Google) - Fast and accurate")
+        console.print("  2. OpenAI (ChatGPT) - Reliable")
+        console.print("  3. Claude (Anthropic) - Advanced reasoning\n")
+        
+        provider_choice = Prompt.ask(
+            "Select AI provider",
+            choices=["1", "2", "3"],
+            default="1"
         )
-
-        final_findings = run_scan(
-            path=scan_path,
-            no_ai=not use_ai,
-            ai_provider=ai_provider,
-            quiet=False, # (جديد) تمرير المتغيرات الناقصة
-            from_hook=False # (جديد) تمرير المتغيرات الناقصة
+        
+        provider_map = {"1": "gemini", "2": "openai", "3": "claude"}
+        ai_provider = provider_map[provider_choice]
+        
+        # Check for API key
+        env_vars = {
+            "gemini": "GEMINI_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "claude": "ANTHROPIC_API_KEY"
+        }
+        
+        env_var = env_vars[ai_provider]
+        if not os.getenv(env_var):
+            console.print(f"\n[yellow]⚠ {env_var} not found in environment[/yellow]")
+            api_key = Prompt.ask(f"Enter {ai_provider.upper()} API key (or press Enter to skip)")
+            if api_key:
+                os.environ[env_var] = api_key
+            else:
+                console.print("[yellow]Continuing without AI verification...[/yellow]")
+                enable_ai = False
+    
+    # Ask about vulnerability scanning
+    enable_vulns = Confirm.ask("\nEnable vulnerability scanning?", default=True)
+    
+    # Ask for path
+    default_path = "."
+    path = Prompt.ask("\nPath to scan", default=default_path)
+    
+    # Ask for report format
+    console.print("\n[bold]Report Formats:[/bold]")
+    console.print("  1. HTML (recommended)")
+    console.print("  2. Markdown")
+    console.print("  3. JSON")
+    console.print("  4. Text")
+    console.print("  5. All formats\n")
+    
+    format_choice = Prompt.ask(
+        "Select report format",
+        choices=["1", "2", "3", "4", "5"],
+        default="1"
+    )
+    
+    format_map = {
+        "1": ["html"],
+        "2": ["markdown"],
+        "3": ["json"],
+        "4": ["text"],
+        "5": ["html", "markdown", "json", "text"]
+    }
+    
+    formats = format_map[format_choice]
+    
+    # Run scan
+    console.print()
+    findings, vulnerabilities, vuln_stats = run_comprehensive_scan(
+        path=path,
+        enable_ai=enable_ai,
+        ai_provider=ai_provider,
+        enable_vulnerabilities=enable_vulns,
+        quiet=False
+    )
+    
+    # Generate reports
+    if findings or vulnerabilities:
+        console.print("\n[bold blue]Generating reports...[/bold blue]")
+        report_paths = generate_reports(
+            findings,
+            vulnerabilities,
+            vuln_stats,
+            formats=formats
         )
+        
+        console.print("\n[bold green]📊 Reports Generated:[/bold green]")
+        for fmt, path in report_paths.items():
+            console.print(f"  • {fmt.upper()}: [cyan]{path}[/cyan]")
+    else:
+        console.print("\n[bold green]✨ No security issues found! Your code looks clean.[/bold green]")
+    
+    # Offer to install git hook
+    if Confirm.ask("\nInstall git pre-commit hook for automatic scanning?", default=False):
+        install_git_hook()
 
-        if not final_findings:
-            console.print("No secrets found. Your code is clean! ✨")
-        else:
-            console.print(f"\n[bold red]Found {len(final_findings)} VERIFIED secrets![/bold red]")
-            affected_files_count = len(set(f['file'] for f in final_findings))
-
-            table = Table(title="AI-Verified Scan Results", show_header=True, header_style="bold magenta")
-            table.add_column("File", style="cyan")
-            table.add_column("Line", style="green")
-            table.add_column("Rule", style="yellow")
-            table.add_column("Match", style="red")
-            for finding in final_findings:
-                table.add_row(finding["file"], str(finding["line"]), finding["rule"], finding["match"])
-            console.print(table)
-
-            console.print("\n" + "-"*30 + "\n")
-            output_format = Prompt.ask(
-                "Which report format do you want to generate?",
-                choices=["html", "md", "json", "text", "all", "none"],
-                default="html"
-            )
-
-            if output_format != "none":
-                report_paths = []
-                with console.status("[bold green]Generating reports...[/bold green]", spinner="dots"):
-                    if output_format == "json" or output_format == "all":
-                        report_paths.append(write_json_report(final_findings))
-                    if output_format == "text" or output_format == "all":
-                        report_paths.append(write_text_report(final_findings))
-                    if output_format == "md" or output_format == "all":
-                        report_paths.append(write_md_report(final_findings, affected_files_count))
-                    if output_format == "html" or output_format == "all":
-                        report_paths.append(write_html_report(final_findings, affected_files_count))
-
-                console.print(f"\n[bold green]✅ Reports successfully generated![/bold green]")
-                for path in report_paths:
-                    if path:
-                        full_path = path.resolve()
-                        console.print(f"- [link=file://{full_path}]{full_path}[/link]")
-
-                if "html" in output_format or "all" in output_format:
-                    if Confirm.ask("\nDo you want to open the HTML report now?", default=True):
-                        open_browser(OUTPUT_DIR / "report.html")
-
-        console.print("\n" + "="*80 + "\n")
-        if not Confirm.ask("Do you want to run another scan?", default=True):
-            console.print("\n[bold magenta]Goodbye![/bold magenta] 👋")
-            break
-
-@app.callback(invoke_without_command=True)
-def main(ctx: typer.Context):
-    """
-    AI-Powered Security Scanner.
-    If no command is specified, runs the interactive mode.
-    """
-    if ctx.invoked_subcommand is None:
-        interactive()
 
 @app.command()
 def scan(
-    path: str = typer.Option(".", "--path", "-p", help="Path to the directory to scan."),
-    output: str = typer.Option("none", "--output", "-o", help="Report format (json, text, md, html, all, none)."),
-    no_ai: bool = typer.Option(False, "--no-ai", help="Disable AI verification."),
-    ai_provider: str = typer.Option("gemini", "--ai-provider", help="AI provider to use (gemini, openai)."),
-    from_hook: bool = typer.Option(False, hidden=True),
-    quiet: bool = typer.Option(False, "--quiet", hidden=True)
+    path: str = typer.Option(".", "--path", "-p", help="Path to scan"),
+    ai_provider: str = typer.Option("gemini", "--ai-provider", help="AI provider (gemini/openai/claude)"),
+    no_ai: bool = typer.Option(False, "--no-ai", help="Disable AI verification"),
+    no_vuln: bool = typer.Option(False, "--no-vuln", help="Disable vulnerability scanning"),
+    output: str = typer.Option("html", "--output", "-o", help="Report format (html/markdown/json/text/all)"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress output"),
+    from_hook: bool = typer.Option(False, "--from-hook", hidden=True, help="Running from git hook")
 ):
     """
-    Runs a non-interactive scan. (Used by automation & Git hooks)
+    Run automated security scan (non-interactive mode).
     """
-    initialize_config() 
-
-    # --- (هنا الإصلاح) ---
-    # تمرير جميع المتغيرات الخمسة
-    final_findings = run_scan(path, no_ai, ai_provider, quiet, from_hook)
-
-    if not final_findings:
-        if not quiet: console.print("No secrets found. Your code is clean! ✨")
-        if from_hook: sys.exit(0)
-        return
-
-    affected_files_count = len(set(f['file'] for f in final_findings))
-
+    # Parse output format
+    if output == "all":
+        formats = ["html", "markdown", "json", "text"]
+    else:
+        formats = [output]
+    
+    # Run scan
+    findings, vulnerabilities, vuln_stats = run_comprehensive_scan(
+        path=path,
+        enable_ai=not no_ai,
+        ai_provider=ai_provider,
+        enable_vulnerabilities=not no_vuln,
+        quiet=quiet,
+        from_hook=from_hook
+    )
+    
+    # Generate reports
+    report_paths = generate_reports(
+        findings,
+        vulnerabilities,
+        vuln_stats,
+        formats=formats,
+        open_browser=not quiet and not from_hook
+    )
+    
     if not quiet:
-        console.print(f"\n[bold red]Found {len(final_findings)} VERIFIED secrets![/bold red]")
-        table = Table(title="AI-Verified Scan Results", show_header=True, header_style="bold magenta")
-        table.add_column("File", style="cyan")
-        table.add_column("Line", style="green")
-        table.add_column("Rule", style="yellow")
-        table.add_column("Match", style="red")
-        for finding in final_findings:
-            table.add_row(finding["file"], str(finding["line"]), finding["rule"], finding["match"])
-        console.print(table)
+        console.print("\n[bold green]✅ Scan complete![/bold green]")
+        console.print(f"📊 Found: {len(findings)} secrets, {len(vulnerabilities)} vulnerabilities")
+        
+        for fmt, path in report_paths.items():
+            console.print(f"  • {fmt.upper()}: [cyan]{path}[/cyan]")
+    
+    # Exit with error code if critical/high vulnerabilities found
+    config = get_config()
+    if from_hook and config.git_hook.block_on_critical:
+        critical_high = vuln_stats.get('critical_and_high', 0)
+        if critical_high > 0 or (config.git_hook.block_on_secrets and findings):
+            sys.exit(1)
 
-    if output and output != "none":
-        if not quiet: console.print("\n[bold blue]Generating Reports...[/bold blue]")
-        report_paths = []
-        if output == "json" or output == "all":
-            report_paths.append(write_json_report(final_findings))
-        if output == "text" or output == "all":
-            report_paths.append(write_text_report(final_findings))
-        if output == "md" or output == "all":
-            report_paths.append(write_md_report(final_findings, affected_files_count))
-        if output == "html" or output == "all":
-            report_paths.append(write_html_report(final_findings, affected_files_count))
-        if not quiet and report_paths:
-            console.print("\n[bold green]Reports successfully generated at:[/bold green]")
-            for path in report_paths:
-                console.print(f"- [link=file://{Path(path).resolve()}]{Path(path).resolve()}[/link]")
-
-    if from_hook:
-        console.print("\n[bold red]COMMIT REJECTED:[/bold red] Secrets detected. Please review findings and try again.")
-        sys.exit(1)
 
 @app.command()
-def install_hook(
-    project_path: str = typer.Option(".", "--path", "-p", help="Path to the Git project to install the hook in.")
-):
+def install_hook():
     """
-    Installs the pre-commit hook into a Git repository.
+    Install git pre-commit hook for automatic scanning.
     """
-    console.rule("[bold blue]Installing Git Pre-Commit Hook[/bold blue]")
-    git_dir = Path(project_path) / ".git"
-    if not git_dir.is_dir():
-        console.print(f"[bold red]Error: '{git_dir}' is not a Git repository. Run 'git init' first.[/bold red]")
-        raise typer.Exit(1)
-    hook_dir = git_dir / "hooks"
-    hook_file = hook_dir / "pre-commit"
-    console.print(f"Target repository: [cyan]{git_dir.resolve()}[/cyan]")
+    console.print("[bold]Installing Git Pre-Commit Hook...[/bold]\n")
+    
+    if install_git_hook():
+        console.print("\n[green]✅ Hook installed successfully![/green]")
+        console.print("\n[dim]The hook will run automatically before each commit.")
+        console.print("To bypass: git commit --no-verify[/dim]")
+    else:
+        console.print("\n[red]❌ Hook installation failed[/red]")
+        sys.exit(1)
 
-    hook_script_content = f"""
-#!/bin/sh
-# Security Scan Pre-Commit Hook (Managed by security-scan)
-echo "--- Running Security Scan (Pre-Commit) ---"
-export PATH="$HOME/.local/bin:$PATH"
-security-scan scan --no-ai --from-hook --output none
-exit_code=$?
-if [ $exit_code -ne 0 ]; then
-    echo "----------------------------------------------"
-    echo "COMMIT FAILED: Secrets found in your code."
-    echo "----------------------------------------------"
-    exit 1
-else
-    echo "--- Security Scan PASSED ---"
-    exit 0
-fi
-"""
 
-    try:
-        if hook_file.exists():
-            console.print(f"[yellow]Warning: A 'pre-commit' hook already exists. Backing it up to 'pre-commit.bak'...[/yellow]")
-            os.rename(hook_file, hook_file.with_suffix(".bak"))
-        with open(hook_file, "w") as f:
-            f.write(hook_script_content)
-        st = os.stat(hook_file)
-        os.chmod(hook_file, st.st_mode | stat.S_IEXEC)
-        console.print(f"[bold green]✅ Git hook installed successfully to: {hook_file}[/bold green]")
-    except Exception as e:
-        console.print(f"[bold red]Error installing hook: {e}[/bold red]")
-        raise typer.Exit(1)
+@app.command()
+def version():
+    """
+    Show version information.
+    """
+    console.print("[bold]Security Scanner v3.0.0[/bold]")
+    console.print("Enhanced with AI verification and vulnerability detection")
+    console.print("\nAuthor: Ahmed Mubaraki")
+    console.print("License: MIT")
+
 
 if __name__ == "__main__":
-    app()
+    try:
+        app()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Scan interrupted by user[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        logger.exception("Unexpected error")
+        console.print(f"\n[red]Fatal error: {e}[/red]")
+        sys.exit(1)
