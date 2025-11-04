@@ -1,0 +1,190 @@
+# Security Scanner Configuration
+# =============================
+
+# Scan Settings
+scan:
+  # Entropy threshold for secret detection (0.0 - 8.0)
+  # Higher values = fewer false positives but might miss some secrets
+  entropy_threshold: 3.5
+
+  # Maximum file size to scan (in bytes) - 10MB default
+  max_file_size: 10485760
+
+  # Enable/disable AI verification
+  enable_ai_verification: true
+
+  # Enable/disable vulnerability scanning
+  enable_vulnerability_scan: true
+
+  # Patterns to ignore (glob patterns)
+  ignore_patterns:
+    - "*.log"
+    - "*.tmp"
+    - "*.cache"
+    - "**/node_modules/**"
+    - "**/.git/**"
+    - "**/venv/**"
+    - "**/__pycache__/**"
+    - "**/output/**"
+    - "**/.venv/**"
+    - "**/dist/**"
+    - "**/build/**"
+    - "**/.pytest_cache/**"
+    - "**/.mypy_cache/**"
+
+  # File extensions to scan
+  scan_extensions:
+    - ".py"
+    - ".js"
+    - ".ts"
+    - ".jsx"
+    - ".tsx"
+    - ".java"
+    - ".go"
+    - ".php"
+    - ".rb"
+    - ".sh"
+    - ".bash"
+    - ".yaml"
+    - ".yml"
+    - ".json"
+    - ".xml"
+    - ".env"
+    - ".config"
+    - ".conf"
+    - ".txt"
+    - ".md"
+    - ".sql"
+    - ".cs"
+    - ".cpp"
+    - ".c"
+    - ".h"
+
+# AI Provider Settings
+ai:
+  # Default provider: gemini, openai, claude
+  default_provider: "gemini"
+
+  # Maximum retries for AI API calls
+  max_retries: 5
+
+  # Timeout for AI API calls (seconds)
+  timeout: 30
+
+  # Rate limit delay (seconds) between requests
+  rate_limit_delay: 0.5
+
+  # Batch size for AI verification (number of findings to verify at once)
+  batch_size: 10
+
+# Gemini Provider Settings
+gemini:
+  model: "gemini-2.0-flash"
+  temperature: 0.0
+  max_tokens: 10
+
+# OpenAI Provider Settings
+openai:
+  model: "gpt-3.5-turbo"
+  temperature: 0.0
+  max_tokens: 2
+
+# Claude Provider Settings
+claude:
+  model: "claude-3-5-sonnet-20241022"
+  temperature: 0.0
+  max_tokens: 10
+
+# Logging Settings
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+
+  # Enable file logging
+  file_logging: true
+
+  # Log file path
+  log_file: "security_scan.log"
+
+  # Log format
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Max log file size (bytes) - 10MB
+  max_size: 10485760
+
+  # Number of backup log files
+  backup_count: 3
+
+# Report Settings
+report:
+  # Default output directory
+  output_dir: "output"
+
+  # Default report formats: html, markdown, json, text
+  default_formats:
+    - "html"
+    - "json"
+
+  # Include AI verification details in reports
+  include_ai_details: true
+
+  # Include vulnerability details in reports
+  include_vulnerability_details: true
+
+  # Auto-open HTML report in browser
+  auto_open_browser: true
+
+# Performance Settings
+performance:
+  # Enable async processing for AI verification
+  enable_async: true
+
+  # Number of worker threads for file scanning
+  worker_threads: 4
+
+  # Enable caching of scan results
+  enable_cache: true
+
+  # Cache expiration time (seconds) - 1 hour
+  cache_expiration: 3600
+
+# Vulnerability Detection Settings
+vulnerabilities:
+  # Severity levels to detect: critical, high, medium, low, info
+  severity_levels:
+    - "critical"
+    - "high"
+    - "medium"
+    - "low"
+    - "info"
+
+  # Categories to scan
+  categories:
+    - "sql_injection"
+    - "xss"
+    - "command_injection"
+    - "path_traversal"
+    - "xxe"
+    - "ssrf"
+    - "insecure_deserialization"
+    - "weak_crypto"
+    - "hardcoded_secrets"
+    - "dangerous_functions"
+    - "insecure_dependencies"
+
+  # Enable CWE (Common Weakness Enumeration) mapping
+  enable_cwe_mapping: true
+
+  # Enable OWASP Top 10 mapping
+  enable_owasp_mapping: true
+
+# Git Hook Settings
+git_hook:
+  # Block commit if critical/high vulnerabilities found
+  block_on_critical: true
+
+  # Block commit if secrets found
+  block_on_secrets: true
+
+  # Show detailed report in hook output
+  show_details: true
