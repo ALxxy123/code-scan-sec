@@ -1,10 +1,12 @@
 """
 Database backend for storing scan history and tracking trends.
 Supports SQLite (default) and PostgreSQL.
+Thread-safe implementation using threading.local() for SQLite connections.
 """
 
 import sqlite3
 import json
+import threading
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from pathlib import Path
@@ -57,6 +59,10 @@ class Database:
         self.db_type = db_type
         self.conn = None
 
+        # Thread-safe connection storage for SQLite
+        self._local = threading.local()
+        self._lock = threading.Lock()
+
         if db_type == "sqlite":
             self._init_sqlite()
         elif db_type == "postgresql":
@@ -65,11 +71,32 @@ class Database:
             raise ValueError(f"Unsupported database type: {db_type}")
 
         self._create_tables()
-        logger.info(f"Database initialized: {db_type}")
+        logger.info(f"Database initialized: {db_type} (thread-safe)")
+
+    def _get_connection(self):
+        """
+        Get thread-local database connection.
+
+        For SQLite: Creates a new connection per thread for thread safety.
+        For PostgreSQL: Returns the shared connection (thread-safe by default).
+
+        Returns:
+            Database connection object
+        """
+        if self.db_type == "sqlite":
+            # Check if this thread has a connection
+            if not hasattr(self._local, 'conn') or self._local.conn is None:
+                self._local.conn = sqlite3.connect(self.db_path)
+                self._local.conn.row_factory = sqlite3.Row
+                logger.debug(f"Created new SQLite connection for thread {threading.current_thread().name}")
+            return self._local.conn
+        else:
+            # PostgreSQL connections are thread-safe
+            return self.conn
 
     def _init_sqlite(self):
-        """Initialize SQLite connection."""
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        """Initialize SQLite connection (main connection for table creation)."""
+        self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row  # Enable column access by name
 
     def _init_postgresql(self):
@@ -84,6 +111,7 @@ class Database:
 
     def _create_tables(self):
         """Create database tables if they don't exist."""
+        # Use main connection for table creation (initialization only)
         cursor = self.conn.cursor()
 
         # Scans table
@@ -170,7 +198,8 @@ class Database:
         Returns:
             Scan ID in database
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
 
         if scan.id:
             # Update existing scan
@@ -222,7 +251,7 @@ class Database:
                 scan.error_message
             ))
 
-        self.conn.commit()
+        conn.commit()
         return cursor.lastrowid
 
     def get_scan(self, scan_id: str) -> Optional[ScanRecord]:
@@ -235,7 +264,8 @@ class Database:
         Returns:
             Scan record or None if not found
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
         cursor.execute("SELECT * FROM scans WHERE scan_id = ?", (scan_id,))
         row = cursor.fetchone()
 
@@ -255,7 +285,8 @@ class Database:
         Returns:
             List of scan records
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
 
         if status:
             cursor.execute("""
@@ -280,7 +311,8 @@ class Database:
         Returns:
             Dictionary with statistics
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
 
         # Total scans
         cursor.execute("SELECT COUNT(*) as count FROM scans")
@@ -332,7 +364,8 @@ class Database:
         Returns:
             List of daily statistics
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
 
         cursor.execute("""
             SELECT
@@ -360,7 +393,8 @@ class Database:
         Returns:
             List of files with vulnerability counts
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
 
         cursor.execute("""
             SELECT
@@ -383,7 +417,8 @@ class Database:
         Returns:
             Dictionary mapping category to count
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
 
         cursor.execute("""
             SELECT category, COUNT(*) as count
@@ -401,7 +436,8 @@ class Database:
         Args:
             days: Number of days to keep
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
 
         # Delete old secrets
         cursor.execute("""
@@ -427,7 +463,7 @@ class Database:
             WHERE start_time < datetime('now', ?)
         """, (f'-{days} days',))
 
-        self.conn.commit()
+        conn.commit()
         logger.info(f"Cleaned up scans older than {days} days")
 
     def export_to_json(self, output_path: str):
@@ -437,7 +473,8 @@ class Database:
         Args:
             output_path: Path to output JSON file
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
 
         # Export all tables
         data = {}
@@ -452,10 +489,18 @@ class Database:
         logger.info(f"Database exported to {output_path}")
 
     def close(self):
-        """Close database connection."""
+        """Close database connection and all thread-local connections."""
+        # Close main connection
         if self.conn:
             self.conn.close()
-            logger.info("Database connection closed")
+            self.conn = None
+
+        # Close thread-local connection if exists
+        if hasattr(self._local, 'conn') and self._local.conn:
+            self._local.conn.close()
+            self._local.conn = None
+
+        logger.info("Database connections closed")
 
 
 # Singleton database instance

@@ -27,30 +27,45 @@ class BeautifulUI:
 
     @staticmethod
     def show_banner():
-        """Display beautiful banner."""
-        banner = """
-╔═══════════════════════════════════════════════════════════════════════╗
-║                                                                       ║
-║     ███████╗███████╗ ██████╗██╗   ██╗██████╗ ██╗████████╗██╗   ██╗  ║
-║     ██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██║╚══██╔══╝╚██╗ ██╔╝  ║
-║     ███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║    ╚████╔╝   ║
-║     ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║     ╚██╔╝    ║
-║     ███████║███████╗╚██████╗╚██████╔╝██║  ██║██║   ██║      ██║     ║
-║     ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝     ║
-║                                                                       ║
-║              🛡️  AI-Powered Security Scanner v3.1.0  🛡️               ║
-║                                                                       ║
-║              Advanced Vulnerability & Secret Detection                ║
-║                    with Auto-Fix Capabilities                         ║
-║                                                                       ║
-╚═══════════════════════════════════════════════════════════════════════╝
+        """Display beautiful banner with gradient colors."""
+        # Enhanced banner with better colors
+        banner_text = """
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                                                                           ║
+║     ███████╗███████╗ ██████╗██╗   ██╗██████╗ ██╗████████╗██╗   ██╗      ║
+║     ██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██║╚══██╔══╝╚██╗ ██╔╝      ║
+║     ███████╗█████╗  ██║     ██║   ██║██████╔╝██║   ██║    ╚████╔╝       ║
+║     ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██║   ██║     ╚██╔╝        ║
+║     ███████║███████╗╚██████╗╚██████╔╝██║  ██║██║   ██║      ██║         ║
+║     ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝         ║
+║                                                                           ║
+║                🛡️  AI-Powered Security Scanner v3.1.0  🛡️                ║
+║                                                                           ║
+║                  Advanced Vulnerability & Secret Detection                ║
+║                        with Auto-Fix Capabilities                         ║
+║                                                                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
         """
 
-        console.print(banner, style="bold cyan")
+        # Print with gradient effect
+        console.print(banner_text, style="bold cyan")
+
+        # Add glowing tagline
         console.print(Align.center(
-            "🔒 Protecting your code, one scan at a time\n",
-            style="dim italic"
+            "✨ 🔒 Protecting your code, one scan at a time 🔒 ✨\n",
+            style="bold magenta"
         ))
+
+        # Add feature badges
+        badges = [
+            "[bold green]✅ AI-Powered[/bold green]",
+            "[bold blue]🤖 3 Providers[/bold blue]",
+            "[bold yellow]🐛 50+ Rules[/bold yellow]",
+            "[bold red]🔑 Secret Detection[/bold red]",
+            "[bold magenta]🔧 Auto-Fix[/bold magenta]"
+        ]
+        console.print(Align.center(" • ".join(badges)))
+        console.print()
 
     @staticmethod
     def show_welcome_screen():
@@ -560,3 +575,224 @@ class BeautifulUI:
 
         if len(fixes) > 5:
             console.print(f"\n[dim]... and {len(fixes) - 5} more fixes[/dim]\n")
+
+    @staticmethod
+    def show_beautiful_chart(title: str, data: Dict, chart_type: str = "bar"):
+        """
+        Display beautiful ASCII charts.
+
+        Args:
+            title: Chart title
+            data: Dictionary with labels as keys and values as numbers
+            chart_type: Type of chart ('bar', 'horizontal_bar', 'pie')
+        """
+        if not data:
+            return
+
+        console.print(f"\n[bold cyan]📊 {title}[/bold cyan]\n")
+
+        if chart_type == "bar" or chart_type == "horizontal_bar":
+            max_value = max(data.values()) if data else 1
+            max_label_length = max(len(str(k)) for k in data.keys()) if data else 10
+
+            for label, value in data.items():
+                # Calculate bar length (max 50 characters)
+                bar_length = int((value / max_value) * 50) if max_value > 0 else 0
+
+                # Color based on value
+                if value / max_value > 0.7:
+                    color = "red"
+                elif value / max_value > 0.4:
+                    color = "yellow"
+                else:
+                    color = "green"
+
+                # Create bar
+                filled_bar = "█" * bar_length
+                empty_bar = "░" * (50 - bar_length)
+                bar = f"[{color}]{filled_bar}[/{color}]{empty_bar}"
+
+                # Format label and value
+                padded_label = str(label).ljust(max_label_length)
+                console.print(f"  {padded_label} │ {bar} [bold]{value}[/bold]")
+
+        console.print()
+
+    @staticmethod
+    def show_severity_distribution(vulnerabilities: List):
+        """Show beautiful severity distribution chart."""
+        if not vulnerabilities:
+            return
+
+        # Count by severity
+        severity_count = {}
+        for vuln in vulnerabilities:
+            severity = vuln.severity if hasattr(vuln, 'severity') else 'unknown'
+            severity_count[severity] = severity_count.get(severity, 0) + 1
+
+        console.print("\n[bold cyan]📊 Vulnerability Severity Distribution[/bold cyan]\n")
+
+        # Define severity colors and emojis
+        severity_config = {
+            'critical': ('🔴', 'red', 'CRITICAL'),
+            'high': ('🟠', 'yellow', 'HIGH'),
+            'medium': ('🟡', 'yellow', 'MEDIUM'),
+            'low': ('🔵', 'blue', 'LOW'),
+            'info': ('⚪', 'dim', 'INFO')
+        }
+
+        max_count = max(severity_count.values()) if severity_count else 1
+
+        for severity in ['critical', 'high', 'medium', 'low', 'info']:
+            if severity not in severity_count:
+                continue
+
+            count = severity_count[severity]
+            emoji, color, label = severity_config.get(severity, ('●', 'white', severity.upper()))
+
+            # Calculate percentage
+            percentage = (count / sum(severity_count.values())) * 100
+
+            # Create bar
+            bar_length = int((count / max_count) * 40)
+            filled_bar = "█" * bar_length
+            empty_bar = "░" * (40 - bar_length)
+            bar = f"[{color}]{filled_bar}[/{color}]{empty_bar}"
+
+            console.print(
+                f"  {emoji} {label:<10} │ {bar} [bold {color}]{count:>3}[/bold {color}] "
+                f"[dim]({percentage:.1f}%)[/dim]"
+            )
+
+        console.print()
+
+    @staticmethod
+    def show_file_risk_heatmap(findings_by_file: Dict):
+        """Show risk heatmap for files."""
+        if not findings_by_file:
+            return
+
+        console.print("\n[bold cyan]🔥 File Risk Heatmap (Top 10)[/bold cyan]\n")
+
+        # Sort files by number of findings
+        sorted_files = sorted(findings_by_file.items(), key=lambda x: x[1], reverse=True)[:10]
+        max_findings = max(count for _, count in sorted_files) if sorted_files else 1
+
+        for file_path, count in sorted_files:
+            # Truncate long file paths
+            display_path = str(file_path)[-50:] if len(str(file_path)) > 50 else str(file_path)
+
+            # Risk level
+            risk_ratio = count / max_findings
+            if risk_ratio > 0.7:
+                risk_emoji = "🔴"
+                risk_color = "red"
+                risk_label = "CRITICAL"
+            elif risk_ratio > 0.4:
+                risk_emoji = "🟠"
+                risk_color = "yellow"
+                risk_label = "HIGH"
+            else:
+                risk_emoji = "🟡"
+                risk_color = "green"
+                risk_label = "MEDIUM"
+
+            # Heat bar
+            bar_length = int(risk_ratio * 30)
+            heat_bar = "▓" * bar_length + "░" * (30 - bar_length)
+
+            console.print(
+                f"  {risk_emoji} [{risk_color}]{heat_bar}[/{risk_color}] "
+                f"[bold]{count:>3}[/bold] issues  [dim]{display_path}[/dim]"
+            )
+
+        console.print()
+
+    @staticmethod
+    def show_animated_progress(message: str, duration: float = 2.0):
+        """Show animated progress indicator."""
+        frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        import time as time_module
+
+        start_time = time_module.time()
+        i = 0
+
+        while time_module.time() - start_time < duration:
+            frame = frames[i % len(frames)]
+            console.print(f"\r[bold cyan]{frame}[/bold cyan] {message}...", end="")
+            time_module.sleep(0.1)
+            i += 1
+
+        console.print(f"\r[bold green]✓[/bold green] {message}... Done!")
+
+    @staticmethod
+    def show_scan_stats_visual(stats: Dict):
+        """Show visual statistics dashboard."""
+        console.print("\n")
+        console.print("═" * 80, style="bold cyan")
+        console.print(Align.center(
+            "[bold cyan]📊 SCAN STATISTICS DASHBOARD 📊[/bold cyan]"
+        ))
+        console.print("═" * 80, style="bold cyan")
+        console.print()
+
+        # Create stats grid
+        stats_data = [
+            ("📂 Files Scanned", stats.get('total_files_scanned', 0), "blue"),
+            ("⏱️  Duration", f"{stats.get('duration', 0):.2f}s", "cyan"),
+            ("🔑 Secrets Found", stats.get('total_secrets', 0), "red"),
+            ("🐛 Vulnerabilities", stats.get('total_vulnerabilities', 0), "yellow"),
+        ]
+
+        # Display in columns
+        from rich.columns import Columns
+
+        panels = []
+        for label, value, color in stats_data:
+            panel_content = f"[bold {color}]{value}[/bold {color}]\n[dim]{label}[/dim]"
+            panels.append(Panel(
+                Align.center(panel_content),
+                border_style=color,
+                padding=(1, 2)
+            ))
+
+        console.print(Columns(panels, equal=True, expand=True))
+        console.print()
+
+    @staticmethod
+    def show_completion_celebration(is_clean: bool):
+        """Show celebration or warning message based on scan results."""
+        if is_clean:
+            # Clean code celebration
+            celebration = """
+[bold green]
+    ✨ ╔═══════════════════════════════════════╗ ✨
+    ✨ ║                                       ║ ✨
+    ✨ ║     🎉  CONGRATULATIONS!  🎉          ║ ✨
+    ✨ ║                                       ║ ✨
+    ✨ ║   Your code is clean and secure!     ║ ✨
+    ✨ ║   No critical issues detected.       ║ ✨
+    ✨ ║                                       ║ ✨
+    ✨ ║   Keep up the great work! 💪         ║ ✨
+    ✨ ║                                       ║ ✨
+    ✨ ╚═══════════════════════════════════════╝ ✨
+[/bold green]
+            """
+            console.print(celebration)
+        else:
+            # Issues found warning
+            warning = """
+[bold yellow]
+    ⚠️  ╔═══════════════════════════════════════╗ ⚠️
+    ⚠️  ║                                       ║ ⚠️
+    ⚠️  ║     🔍  ISSUES DETECTED  🔍           ║ ⚠️
+    ⚠️  ║                                       ║ ⚠️
+    ⚠️  ║   Security issues found!             ║ ⚠️
+    ⚠️  ║   Please review and fix them.        ║ ⚠️
+    ⚠️  ║                                       ║ ⚠️
+    ⚠️  ║   Run auto-fix to help! 🔧          ║ ⚠️
+    ⚠️  ║                                       ║ ⚠️
+    ⚠️  ╚═══════════════════════════════════════╝ ⚠️
+[/bold yellow]
+            """
+            console.print(warning)
