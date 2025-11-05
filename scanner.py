@@ -34,6 +34,7 @@ from logger import get_logger
 from vulnerability_scanner import VulnerabilityScanner, scan_for_vulnerabilities
 from report_generator import ReportGenerator
 from auto_fix import AutoFix, auto_fix_directory
+from ui_components import BeautifulUI
 
 # Import AI providers
 from ai_providers.gemini_provider import GeminiProvider
@@ -435,7 +436,7 @@ def run_comprehensive_scan(
 ) -> Tuple[List[Dict], List, Dict]:
     """
     Run comprehensive security scan including secrets and vulnerabilities.
-    
+
     Args:
         path: Path to scan
         enable_ai: Enable AI verification
@@ -443,79 +444,126 @@ def run_comprehensive_scan(
         enable_vulnerabilities: Enable vulnerability scanning
         quiet: Suppress output
         from_hook: Running from git hook
-        
+
     Returns:
         Tuple[List[Dict], List, Dict]: (secret_findings, vulnerabilities, vuln_stats)
     """
     config = get_config()
-    
+    start_time = time.time()
+
+    # Show beautiful scan header
     if not quiet and not from_hook:
-        console.rule("[bold blue]🛡️  Security Scan Started[/bold blue]")
-        console.print(f"📂 Target: [cyan]{path}[/cyan]")
-        console.print(f"🤖 AI Verification: [cyan]{'Enabled' if enable_ai else 'Disabled'}[/cyan]")
-        console.print(f"🐛 Vulnerability Scan: [cyan]{'Enabled' if enable_vulnerabilities else 'Disabled'}[/cyan]\n")
-    
+        BeautifulUI.show_scan_header(path, ai_provider, enable_ai, enable_vulnerabilities)
+
     logger.info(f"Starting scan: path={path}, ai={enable_ai}, vuln={enable_vulnerabilities}")
-    
+
     # Load rules and patterns
     rules = load_rules()
     ignore_patterns = load_ignore_patterns()
-    
+
     # Collect files
     files = collect_files(path, ignore_patterns)
-    
+
     if not files:
         logger.warning("No files found to scan")
         if not quiet:
-            console.print("[yellow]No files found to scan[/yellow]")
+            console.print("[yellow]⚠️  No files found to scan[/yellow]")
         return [], [], {}
-    
-    # Scan for secrets
-    potential_findings = scan_for_secrets(files, rules, quiet)
-    
+
+    # Beautiful progress bar for scanning
+    total_files = len(files)
+    secrets_found = []
+
+    if not quiet and not from_hook:
+        with BeautifulUI.create_scan_progress(total_files) as progress:
+            task = progress.add_task("[cyan]🔍 Scanning for secrets...", total=total_files)
+
+            for i, file_path in enumerate(files):
+                # Scan file
+                for rule in rules:
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read()
+
+                        for match in rule.finditer(content):
+                            secrets_found.append({
+                                'file': file_path,
+                                'line_number': content[:match.start()].count('\n') + 1,
+                                'match': match.group(),
+                                'type': 'Secret',
+                                'file_path': file_path
+                            })
+                    except Exception as e:
+                        logger.debug(f"Error scanning {file_path}: {e}")
+
+                progress.update(task, advance=1)
+    else:
+        # Quiet mode - scan without progress bar
+        secrets_found = scan_for_secrets(files, rules, quiet=True)
+
+    potential_findings = secrets_found
+
     # Filter by entropy
     entropy_threshold = config.scan.entropy_threshold
-    high_entropy_findings = filter_by_entropy(potential_findings, entropy_threshold, quiet)
-    
+    high_entropy_findings = filter_by_entropy(potential_findings, entropy_threshold, quiet=True)
+
     # AI verification
     final_findings = []
     if enable_ai and high_entropy_findings:
         final_findings = verify_with_ai(high_entropy_findings, ai_provider, quiet)
     else:
         final_findings = high_entropy_findings
-    
+
     # Vulnerability scanning
     vulnerabilities = []
     vuln_stats = {}
     if enable_vulnerabilities:
         if not quiet:
-            console.print("\n[bold blue]🐛 Scanning for vulnerabilities...[/bold blue]")
-        
+            console.print("\n[bold cyan]🐛 Scanning for vulnerabilities...[/bold cyan]")
+
         try:
             vulnerabilities, vuln_stats = scan_for_vulnerabilities(
                 path,
                 min_severity=config.vulnerabilities.severity_levels[0]
                     if config.vulnerabilities.severity_levels else "low"
             )
-            
-            if not quiet:
-                console.print(
-                    f"[green]Found {len(vulnerabilities)} vulnerabilities[/green] "
-                    f"([red]{vuln_stats.get('critical_and_high', 0)} critical/high[/red])"
-                )
+
+            if not quiet and not from_hook:
+                console.print(f"[dim]Found {len(vulnerabilities)} vulnerabilities[/dim]\n")
         except Exception as e:
             logger.error(f"Vulnerability scan failed: {e}")
             if not quiet:
-                console.print(f"[yellow]Warning: Vulnerability scan failed: {e}[/yellow]")
-    
+                console.print(f"[yellow]⚠️  Warning: Vulnerability scan failed: {e}[/yellow]")
+
+    # Calculate duration and show beautiful summary
+    duration = time.time() - start_time
+
     if not quiet and not from_hook:
-        console.rule("[bold green]✅ Scan Complete[/bold green]")
-    
+        # Add total files to stats
+        vuln_stats['total_files_scanned'] = total_files
+
+        # Show beautiful summary
+        BeautifulUI.show_scan_summary(final_findings, vulnerabilities, vuln_stats, duration)
+
+        # Show vulnerability details if found
+        if vulnerabilities:
+            critical_vulns = [v for v in vulnerabilities if v.severity == 'critical']
+            if critical_vulns:
+                BeautifulUI.show_vulnerability_details(critical_vulns, limit=5)
+
+        # Show secret details if found
+        if final_findings:
+            BeautifulUI.show_secret_details(final_findings, limit=3)
+
+        # Show next steps
+        has_critical = any(v.severity == 'critical' for v in vulnerabilities)
+        BeautifulUI.show_next_steps(has_critical, len(final_findings) > 0, len(vulnerabilities) > 0)
+
     logger.info(
         f"Scan complete: {len(final_findings)} secrets, "
-        f"{len(vulnerabilities)} vulnerabilities"
+        f"{len(vulnerabilities)} vulnerabilities in {duration:.2f}s"
     )
-    
+
     return final_findings, vulnerabilities, vuln_stats
 
 
@@ -686,108 +734,59 @@ exit 0
 @app.command()
 def interactive():
     """
-    Start interactive wizard mode for guided scanning.
+    🎯 Start interactive wizard mode for guided scanning.
+
+    This provides a beautiful, step-by-step interface for configuring
+    and running security scans.
     """
-    print_welcome_banner()
-    
-    console.print("[bold]Welcome to Interactive Mode![/bold]\n")
-    console.print("This wizard will guide you through the security scan process.\n")
-    
-    # Ask about AI verification
-    enable_ai = Confirm.ask("Enable AI verification (reduces false positives)?", default=True)
-    
-    ai_provider = "gemini"
-    if enable_ai:
-        console.print("\n[bold]Available AI Providers:[/bold]")
-        console.print("  1. Gemini (Google) - Fast and accurate")
-        console.print("  2. OpenAI (ChatGPT) - Reliable")
-        console.print("  3. Claude (Anthropic) - Advanced reasoning\n")
-        
-        provider_choice = Prompt.ask(
-            "Select AI provider",
-            choices=["1", "2", "3"],
-            default="1"
-        )
-        
-        provider_map = {"1": "gemini", "2": "openai", "3": "claude"}
-        ai_provider = provider_map[provider_choice]
-        
-        # Check for API key
+    # Show beautiful interactive prompt
+    config = BeautifulUI.prompt_interactive_scan()
+
+    # Check for API key if AI is enabled
+    if config['enable_ai']:
         env_vars = {
             "gemini": "GEMINI_API_KEY",
             "openai": "OPENAI_API_KEY",
             "claude": "ANTHROPIC_API_KEY"
         }
-        
-        env_var = env_vars[ai_provider]
+
+        env_var = env_vars[config['ai_provider']]
         if not os.getenv(env_var):
             console.print(f"\n[yellow]⚠ {env_var} not found in environment[/yellow]")
-            api_key = Prompt.ask(f"Enter {ai_provider.upper()} API key (or press Enter to skip)")
+            api_key = Prompt.ask(f"Enter {config['ai_provider'].upper()} API key (or press Enter to skip)", password=True)
             if api_key:
                 os.environ[env_var] = api_key
             else:
                 console.print("[yellow]Continuing without AI verification...[/yellow]")
-                enable_ai = False
-    
-    # Ask about vulnerability scanning
-    enable_vulns = Confirm.ask("\nEnable vulnerability scanning?", default=True)
-    
-    # Ask for path
-    default_path = "."
-    path = Prompt.ask("\nPath to scan", default=default_path)
-    
-    # Ask for report format
-    console.print("\n[bold]Report Formats:[/bold]")
-    console.print("  1. HTML (recommended)")
-    console.print("  2. Markdown")
-    console.print("  3. JSON")
-    console.print("  4. Text")
-    console.print("  5. All formats\n")
-    
-    format_choice = Prompt.ask(
-        "Select report format",
-        choices=["1", "2", "3", "4", "5"],
-        default="1"
-    )
-    
-    format_map = {
-        "1": ["html"],
-        "2": ["markdown"],
-        "3": ["json"],
-        "4": ["text"],
-        "5": ["html", "markdown", "json", "text"]
-    }
-    
-    formats = format_map[format_choice]
-    
-    # Run scan
+                config['enable_ai'] = False
+
+    # Run scan with beautiful UI
     console.print()
     findings, vulnerabilities, vuln_stats = run_comprehensive_scan(
-        path=path,
-        enable_ai=enable_ai,
-        ai_provider=ai_provider,
-        enable_vulnerabilities=enable_vulns,
+        path=config['path'],
+        enable_ai=config['enable_ai'],
+        ai_provider=config['ai_provider'],
+        enable_vulnerabilities=config['enable_vulnerabilities'],
         quiet=False
     )
-    
+
     # Generate reports
+    formats = ["html", "json"]
     if findings or vulnerabilities:
-        console.print("\n[bold blue]Generating reports...[/bold blue]")
+        console.print("\n[bold blue]📝 Generating reports...[/bold blue]")
         report_paths = generate_reports(
             findings,
             vulnerabilities,
             vuln_stats,
             formats=formats
         )
-        
+
         console.print("\n[bold green]📊 Reports Generated:[/bold green]")
         for fmt, path in report_paths.items():
             console.print(f"  • {fmt.upper()}: [cyan]{path}[/cyan]")
-    else:
-        console.print("\n[bold green]✨ No security issues found! Your code looks clean.[/bold green]")
-    
+
     # Offer to install git hook
-    if Confirm.ask("\nInstall git pre-commit hook for automatic scanning?", default=False):
+    if Confirm.ask("\n[bold]Install git pre-commit hook for automatic scanning?[/bold]", default=False):
         install_git_hook()
 
 
@@ -979,10 +978,101 @@ def version():
     """
     Show version information.
     """
-    console.print("[bold]Security Scanner v3.0.0[/bold]")
-    console.print("Enhanced with AI verification and vulnerability detection")
-    console.print("\nAuthor: Ahmed Mubaraki")
-    console.print("License: MIT")
+    BeautifulUI.show_welcome_screen()
+    console.print()
+    console.print("[bold cyan]Author:[/bold cyan] Ahmed Mubaraki")
+    console.print("[bold cyan]License:[/bold cyan] MIT")
+    console.print("[bold cyan]Repository:[/bold cyan] https://github.com/ALxxy123/code-scan-sec")
+    console.print()
+
+
+@app.command()
+def demo():
+    """
+    🎨 Show beautiful UI demo and available features.
+
+    This displays the scanner's capabilities and beautiful interface
+    without running an actual scan.
+    """
+    BeautifulUI.show_welcome_screen()
+
+    # Show sample scan summary with demo data
+    console.print("[bold cyan]📊 Example Scan Results:[/bold cyan]\n")
+
+    demo_secrets = [
+        {
+            'type': 'API Key',
+            'file_path': 'src/config.py',
+            'line_number': 45,
+            'matched_text': 'sk-1234567890abcdef',
+            'ai_verified': True
+        },
+        {
+            'type': 'AWS Access Key',
+            'file_path': 'src/aws.py',
+            'line_number': 12,
+            'matched_text': 'AKIAIOSFODNN7EXAMPLE',
+            'ai_verified': True
+        }
+    ]
+
+    from vulnerability_scanner import Vulnerability
+    demo_vulns = [
+        Vulnerability(
+            name="SQL Injection",
+            severity="critical",
+            category="sql_injection",
+            cwe="CWE-89",
+            owasp="A03:2021",
+            file_path="src/database/queries.py",
+            line_number=45,
+            matched_text="query = 'SELECT * FROM users WHERE id = ' + user_id",
+            description="SQL query uses string concatenation",
+            recommendation="Use parameterized queries",
+            pattern=r"query.*\+.*",
+            languages=["python", "javascript"]
+        ),
+        Vulnerability(
+            name="Weak Cryptography - MD5",
+            severity="high",
+            category="weak_crypto",
+            cwe="CWE-327",
+            owasp="A02:2021",
+            file_path="src/utils/crypto.py",
+            line_number=23,
+            matched_text="hashlib.md5(password)",
+            description="MD5 is cryptographically broken",
+            recommendation="Use SHA256 or bcrypt",
+            pattern=r"hashlib\.md5",
+            languages=["python"]
+        )
+    ]
+
+    demo_stats = {
+        'total_files_scanned': 150,
+        'vulnerability_stats': {
+            'by_severity': {
+                'critical': 1,
+                'high': 2,
+                'medium': 5,
+                'low': 3
+            },
+            'by_category': {
+                'sql_injection': 1,
+                'xss': 2,
+                'weak_crypto': 2,
+                'command_injection': 1,
+                'dangerous_functions': 5
+            }
+        }
+    }
+
+    BeautifulUI.show_scan_summary(demo_secrets, demo_vulns, demo_stats, 12.5)
+    BeautifulUI.show_vulnerability_details(demo_vulns, limit=2)
+    BeautifulUI.show_secret_details(demo_secrets, limit=2)
+
+    console.print("\n[bold green]✨ Ready to scan your code?[/bold green]")
+    console.print("Try: [cyan]security-scan interactive[/cyan]\n")
 
 
 if __name__ == "__main__":
