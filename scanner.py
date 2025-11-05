@@ -18,6 +18,8 @@ import time
 import math
 import sys
 from pathlib import Path
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, track
@@ -99,13 +101,17 @@ def initialize_config() -> None:
         logger.info(f"Created ignore file: {IGNORE_FILE}")
 
 
+@lru_cache(maxsize=1)
 def load_rules() -> List[re.Pattern]:
     """
-    Load regex patterns from rules file.
-    
+    Load regex patterns from rules file (cached).
+
+    Uses LRU cache to avoid re-loading rules on every scan.
+    Cache is cleared when rules file is modified.
+
     Returns:
         List[re.Pattern]: Compiled regex patterns
-        
+
     Raises:
         SystemExit: If rules file doesn't exist
     """
@@ -114,7 +120,7 @@ def load_rules() -> List[re.Pattern]:
         console.print("Please run [bold]'security-scan interactive'[/bold] to create it.")
         logger.error(f"Rules file not found: {RULES_FILE}")
         sys.exit(1)
-    
+
     try:
         with open(RULES_FILE, "r", encoding="utf-8") as f:
             lines = f.read().splitlines()
@@ -123,7 +129,7 @@ def load_rules() -> List[re.Pattern]:
                 for line in lines
                 if line.strip() and not line.strip().startswith("#")
             ]
-        logger.info(f"Loaded {len(patterns)} rules from {RULES_FILE}")
+        logger.info(f"Loaded {len(patterns)} rules from {RULES_FILE} (cached)")
         return patterns
     except re.error as e:
         logger.error(f"Invalid regex pattern in rules file: {e}")
@@ -135,28 +141,29 @@ def load_rules() -> List[re.Pattern]:
         sys.exit(1)
 
 
-def load_ignore_patterns() -> List[str]:
+@lru_cache(maxsize=1)
+def load_ignore_patterns() -> Tuple[str, ...]:
     """
-    Load ignore patterns from ignore file.
-    
+    Load ignore patterns from ignore file (cached).
+
     Returns:
-        List[str]: List of patterns to ignore
+        Tuple[str, ...]: Tuple of patterns to ignore (tuple for caching)
     """
     if not IGNORE_FILE.exists():
-        return []
-    
+        return tuple()
+
     try:
         with open(IGNORE_FILE, "r", encoding="utf-8") as f:
-            patterns = [
+            patterns = tuple([
                 p.strip()
                 for p in f.read().splitlines()
                 if p.strip() and not p.startswith("#")
-            ]
-        logger.info(f"Loaded {len(patterns)} ignore patterns")
+            ])
+        logger.info(f"Loaded {len(patterns)} ignore patterns (cached)")
         return patterns
     except Exception as e:
         logger.warning(f"Failed to load ignore patterns: {e}")
-        return []
+        return tuple()
 
 
 def calculate_entropy(text: str) -> float:
@@ -209,7 +216,7 @@ def extract_value_for_entropy(match_string: str) -> str:
 
 def collect_files(
     path: str,
-    ignore_patterns: Optional[List[str]] = None
+    ignore_patterns: Optional[Tuple[str, ...]] = None
 ) -> List[Path]:
     """
     Collect all files to scan from given path.
@@ -267,63 +274,91 @@ def collect_files(
     return files_to_scan
 
 
+def scan_single_file(file_path: Path, rules: List[re.Pattern]) -> List[Dict]:
+    """
+    Scan a single file for secrets (for parallel execution).
+
+    Args:
+        file_path: Path to file to scan
+        rules: Compiled regex patterns
+
+    Returns:
+        List[Dict]: Findings in this file
+    """
+    findings = []
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line_num, line in enumerate(f, 1):
+                for rule in rules:
+                    match = rule.search(line)
+                    if match:
+                        findings.append({
+                            "file": str(file_path),
+                            "line": line_num,
+                            "match": match.group(0).strip(),
+                            "rule": rule.pattern
+                        })
+                        break  # One match per line
+    except Exception as e:
+        logger.debug(f"Failed to scan {file_path}: {e}")
+    return findings
+
+
 def scan_for_secrets(
     files: List[Path],
     rules: List[re.Pattern],
-    quiet: bool = False
+    quiet: bool = False,
+    use_parallel: bool = True
 ) -> List[Dict]:
     """
     Scan files for potential secrets using regex patterns.
-    
+
     Args:
         files: List of files to scan
         rules: Compiled regex patterns
         quiet: Suppress progress output
-        
+        use_parallel: Use parallel processing (default: True)
+
     Returns:
         List[Dict]: List of potential findings
     """
-    logger.info(f"Scanning {len(files)} files for secrets...")
+    logger.info(f"Scanning {len(files)} files for secrets (parallel={use_parallel})...")
     potential_findings = []
-    
-    if quiet:
-        # Silent mode
-        for file_path in files:
-            try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    for line_num, line in enumerate(f, 1):
-                        for rule in rules:
-                            match = rule.search(line)
-                            if match:
-                                potential_findings.append({
-                                    "file": str(file_path),
-                                    "line": line_num,
-                                    "match": match.group(0).strip(),
-                                    "rule": rule.pattern
-                                })
-                                break  # One match per line
-            except Exception as e:
-                logger.debug(f"Failed to scan {file_path}: {e}")
+
+    config = get_config()
+    max_workers = config.api.get('max_workers', 4) if use_parallel else 1
+
+    if use_parallel and len(files) > 10:
+        # Parallel mode for large file sets
+        if not quiet:
+            console.print(f"\n[bold blue]⚡ Parallel scanning {len(files)} files with {max_workers} workers...[/bold blue]")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all files for scanning
+            future_to_file = {executor.submit(scan_single_file, file_path, rules): file_path
+                            for file_path in files}
+
+            # Collect results with progress tracking
+            completed = 0
+            for future in as_completed(future_to_file):
+                findings = future.result()
+                potential_findings.extend(findings)
+                completed += 1
+                if not quiet and completed % 10 == 0:
+                    console.print(f"[dim]Progress: {completed}/{len(files)} files scanned...[/dim]")
+
     else:
-        # With progress bar
-        console.print("\n[bold blue]Scanning files for secrets...[/bold blue]")
-        for file_path in track(files, description="[cyan]Scanning..."):
-            try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    for line_num, line in enumerate(f, 1):
-                        for rule in rules:
-                            match = rule.search(line)
-                            if match:
-                                potential_findings.append({
-                                    "file": str(file_path),
-                                    "line": line_num,
-                                    "match": match.group(0).strip(),
-                                    "rule": rule.pattern
-                                })
-                                break
-            except Exception as e:
-                logger.debug(f"Failed to scan {file_path}: {e}")
-    
+        # Sequential mode (original behavior)
+        if quiet:
+            for file_path in files:
+                findings = scan_single_file(file_path, rules)
+                potential_findings.extend(findings)
+        else:
+            console.print("\n[bold blue]Scanning files for secrets...[/bold blue]")
+            for file_path in track(files, description="[cyan]Scanning..."):
+                findings = scan_single_file(file_path, rules)
+                potential_findings.extend(findings)
+
     logger.info(f"Found {len(potential_findings)} potential secrets")
     return potential_findings
 

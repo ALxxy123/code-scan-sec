@@ -30,14 +30,20 @@ app = FastAPI(
     version="3.0.0"
 )
 
-# Configure CORS
+# Configure CORS - Load from config for security
+config = get_config()
+allowed_origins = config.api.get('allowed_origins', ['http://localhost:8000'])
+allowed_methods = config.api.get('allowed_methods', ['GET', 'POST'])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this appropriately for production
+    allow_origins=allowed_origins,  # ✅ Secure: Only specific origins from config
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=allowed_methods,  # ✅ Secure: Only needed methods from config
+    allow_headers=["Content-Type", "Authorization"],  # ✅ Secure: Specific headers only
 )
+
+logger.info(f"CORS configured with origins: {allowed_origins}")
 
 # Global state
 active_scans = {}
