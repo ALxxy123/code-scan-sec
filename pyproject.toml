@@ -84,7 +84,8 @@ py-modules = [
     "report_generator",
     "auto_fix",
     "api_server",
-    "database"
+    "database",
+    "ui_components"
 ]
 
 [tool.setuptools.package-data]

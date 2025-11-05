@@ -6,19 +6,24 @@
 
 **The most advanced open-source security scanner** that detects hardcoded secrets, API keys, passwords, **AND** security vulnerabilities using AI-powered verification.
 
-## ✨ What's New in v3.0
+## ✨ What's New in v3.1.0
 
 🚀 **Major enhancements:**
-- 🔧 **Auto-Fix Engine** - Automatically fix common vulnerabilities (MD5→SHA256, secrets→env vars, etc.)
-- 🔄 **CI/CD Integration** - Ready-to-use GitHub Actions workflows for automated scanning
-- 🐛 **Advanced Vulnerability Detection** - Detects SQL Injection, XSS, Command Injection, and 50+ vulnerability types
-- 🤖 **Claude AI Support** - Added Anthropic Claude alongside Gemini and OpenAI
-- 📊 **Enhanced Reporting** - Beautiful HTML reports with severity breakdowns
-- ⚙️ **YAML Configuration** - Flexible configuration system
-- 📝 **Comprehensive Logging** - Detailed logging with file rotation
-- 🧪 **Unit Tests** - Full test coverage for reliability
-- 🎯 **OWASP & CWE Mapping** - Industry-standard vulnerability classification
-- ⚡ **Performance Improvements** - Faster scanning with better accuracy
+- 🎨 **Beautiful Terminal UI** - Stunning, professional CLI interface with:
+  - ✨ ASCII art banner and colorful output
+  - 📊 Real-time progress bars with file count and ETA
+  - 📈 Security score grading system (A+ to F)
+  - 🎯 Interactive scan configuration wizard
+  - 📋 Detailed vulnerability cards with recommendations
+  - 🌈 Color-coded severity levels
+- 🔧 **Auto-Fix Engine** - Automatically fix vulnerabilities (MD5→SHA256, secrets→env vars)
+- 🔄 **CI/CD Integration** - Ready-to-use GitHub Actions workflows
+- 🌐 **Web Dashboard** - Real-time monitoring with interactive interface
+- 🗄️ **Database Backend** - Track scan history and trends (SQLite/PostgreSQL)
+- 🐛 **Advanced Vulnerability Detection** - 50+ vulnerability types
+- 🤖 **Multi-AI Support** - Gemini, OpenAI, and Claude
+- 📊 **Enhanced Reporting** - Beautiful HTML reports
+- ⚡ **Performance Improvements** - Faster with better accuracy
 
 ---
 
@@ -95,19 +100,30 @@ pip install -e .
 
 ### Basic Usage
 
-**Interactive Mode (Easiest):**
+**🎨 See the Beautiful UI (Demo):**
+```bash
+# Show beautiful interface demo with example results
+security-scan demo
+
+# Show version info with ASCII banner
+security-scan version
+```
+
+**🎯 Interactive Mode (Recommended for First-Time Users):**
 ```bash
 security-scan interactive
 ```
 
-This wizard will guide you through:
-1. ✅ AI verification setup
-2. 🤖 AI provider selection (Gemini/OpenAI/Claude)
-3. 🐛 Vulnerability scanning options
-4. 📁 Path selection
-5. 📊 Report format choice
+This launches a beautiful wizard that guides you through:
+- 📊 Scan mode selection (Quick/Full/Custom)
+- 🤖 AI provider selection (Gemini/OpenAI/Claude)
+- 📁 Path selection with validation
+- ✨ Beautiful progress bars and real-time statistics
+- 📈 Security score grading (A+ to F)
+- 🎯 Detailed vulnerability cards
+- 💡 Recommended next steps
 
-**Automated Mode (CI/CD):**
+**⚡ Automated Mode (For CI/CD & Scripts):**
 ```bash
 # Full scan with AI and vulnerabilities
 export GEMINI_API_KEY="your-key-here"
