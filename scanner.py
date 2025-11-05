@@ -33,6 +33,7 @@ from config import get_config, reload_config
 from logger import get_logger
 from vulnerability_scanner import VulnerabilityScanner, scan_for_vulnerabilities
 from report_generator import ReportGenerator
+from auto_fix import AutoFix, auto_fix_directory
 
 # Import AI providers
 from ai_providers.gemini_provider import GeminiProvider
@@ -856,6 +857,120 @@ def install_hook():
         console.print("To bypass: git commit --no-verify[/dim]")
     else:
         console.print("\n[red]❌ Hook installation failed[/red]")
+        sys.exit(1)
+
+
+@app.command()
+def auto_fix(
+    path: str = typer.Option(".", help="Path to scan and fix"),
+    fix_types: Optional[List[str]] = typer.Option(None, help="Fix types to apply (crypto, secrets, sql, dangerous, xss)"),
+    interactive: bool = typer.Option(True, help="Ask for confirmation before applying fixes"),
+    extensions: Optional[List[str]] = typer.Option(None, help="File extensions to process"),
+    dry_run: bool = typer.Option(False, help="Show fixes without applying them")
+):
+    """
+    🔧 Automatically fix security vulnerabilities in your code.
+
+    Fixes include:
+    - Weak cryptography (MD5 → SHA256, SHA1 → SHA256)
+    - Hardcoded secrets (move to environment variables)
+    - SQL injection (suggest parameterized queries)
+    - Dangerous functions (eval, exec, pickle)
+    - XSS vulnerabilities (suggest sanitization)
+
+    Examples:
+        security-scan auto-fix --path ./src
+        security-scan auto-fix --path . --fix-types crypto secrets
+        security-scan auto-fix --path . --dry-run
+        security-scan auto-fix --path . --no-interactive
+    """
+    console.print(Panel.fit(
+        "[bold cyan]🔧 Auto-Fix Engine[/bold cyan]\n\n"
+        "Automatically fixes common security vulnerabilities",
+        title="Security Auto-Fix"
+    ))
+
+    # Validate path
+    if not Path(path).exists():
+        console.print(f"[red]Error: Path '{path}' does not exist[/red]")
+        sys.exit(1)
+
+    # Dry run mode
+    if dry_run:
+        console.print("\n[yellow]🔍 DRY RUN MODE - No changes will be applied[/yellow]\n")
+        interactive = False
+
+    # Show warning
+    if not dry_run:
+        console.print("\n[yellow]⚠️  Warning: This will modify your source code![/yellow]")
+        console.print("[yellow]   Backups will be created with .backup extension[/yellow]\n")
+
+        if not Confirm.ask("Do you want to continue?"):
+            console.print("[yellow]Operation cancelled[/yellow]")
+            return
+
+    # Parse fix types
+    fix_type_list = None
+    if fix_types:
+        fix_type_list = [ft.strip() for ft in fix_types]
+        valid_types = {'crypto', 'secrets', 'sql', 'dangerous', 'xss'}
+        invalid = set(fix_type_list) - valid_types
+        if invalid:
+            console.print(f"[red]Error: Invalid fix types: {', '.join(invalid)}[/red]")
+            console.print(f"Valid types: {', '.join(valid_types)}")
+            sys.exit(1)
+
+    # Parse extensions
+    ext_list = extensions if extensions else ['.py', '.js', '.ts', '.php', '.java']
+
+    # Run auto-fix
+    start_time = time.time()
+
+    try:
+        if Path(path).is_file():
+            # Fix single file
+            auto_fix_engine = AutoFix(interactive=interactive and not dry_run)
+            result = auto_fix_engine.fix_file(path, fix_type_list)
+
+            if result['success']:
+                if result.get('fixes'):
+                    console.print(f"\n[green]✅ Fixed {len(result['fixes'])} issues in {path}[/green]")
+                    if result.get('backup_path'):
+                        console.print(f"[dim]Backup: {result['backup_path']}[/dim]")
+                else:
+                    console.print(f"\n[green]✅ No fixes needed for {path}[/green]")
+            else:
+                if result.get('skipped'):
+                    console.print(f"\n[yellow]⏭️  Skipped {path}[/yellow]")
+                else:
+                    console.print(f"\n[red]❌ Failed to fix {path}: {result.get('error')}[/red]")
+        else:
+            # Fix directory
+            summary = auto_fix_directory(
+                directory=path,
+                fix_types=fix_type_list,
+                interactive=interactive and not dry_run,
+                extensions=ext_list
+            )
+
+            # Show detailed summary
+            elapsed_time = time.time() - start_time
+            console.print(f"\n[dim]Completed in {elapsed_time:.2f} seconds[/dim]")
+
+            if summary['applied'] > 0:
+                console.print(f"\n[bold green]Successfully applied {summary['applied']} fixes![/bold green]")
+                console.print("\n[yellow]⚠️  Remember to:[/yellow]")
+                console.print("  1. Review the changes")
+                console.print("  2. Test your code")
+                console.print("  3. Update .env files with real values")
+                console.print("  4. Commit the changes")
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Auto-fix interrupted by user[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        logger.exception("Auto-fix failed")
+        console.print(f"\n[red]Error: {e}[/red]")
         sys.exit(1)
 
 

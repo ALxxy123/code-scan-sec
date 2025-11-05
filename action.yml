@@ -1,0 +1,175 @@
+name: 'Security Scanner'
+description: 'Enhanced AI-Powered Security Scanner with vulnerability detection'
+author: 'Ahmed Mubaraki'
+
+branding:
+  icon: 'shield'
+  color: 'red'
+
+inputs:
+  path:
+    description: 'Path to scan for security issues'
+    required: false
+    default: '.'
+
+  ai-provider:
+    description: 'AI provider to use (gemini, openai, claude)'
+    required: false
+    default: 'gemini'
+
+  enable-ai:
+    description: 'Enable AI verification for secrets'
+    required: false
+    default: 'true'
+
+  enable-vulnerabilities:
+    description: 'Enable vulnerability scanning'
+    required: false
+    default: 'true'
+
+  output-format:
+    description: 'Report output format (html, markdown, json, text, all)'
+    required: false
+    default: 'all'
+
+  gemini-api-key:
+    description: 'Google Gemini API key'
+    required: false
+
+  openai-api-key:
+    description: 'OpenAI API key'
+    required: false
+
+  anthropic-api-key:
+    description: 'Anthropic Claude API key'
+    required: false
+
+  fail-on-critical:
+    description: 'Fail the workflow if critical issues are found'
+    required: false
+    default: 'true'
+
+  fail-on-secrets:
+    description: 'Fail the workflow if secrets are found'
+    required: false
+    default: 'true'
+
+outputs:
+  total-secrets:
+    description: 'Total number of secrets found'
+    value: ${{ steps.scan.outputs.total_secrets }}
+
+  total-vulnerabilities:
+    description: 'Total number of vulnerabilities found'
+    value: ${{ steps.scan.outputs.total_vulnerabilities }}
+
+  critical-vulnerabilities:
+    description: 'Number of critical vulnerabilities found'
+    value: ${{ steps.scan.outputs.critical_vulnerabilities }}
+
+  high-vulnerabilities:
+    description: 'Number of high vulnerabilities found'
+    value: ${{ steps.scan.outputs.high_vulnerabilities }}
+
+  report-path:
+    description: 'Path to the generated report'
+    value: 'output/'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install Security Scanner
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install security-scan-cli
+
+    - name: Run Security Scan
+      id: scan
+      shell: bash
+      env:
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+      run: |
+        # Build command arguments
+        ARGS="--path ${{ inputs.path }}"
+
+        if [ "${{ inputs.enable-ai }}" = "true" ]; then
+          ARGS="$ARGS --ai-provider ${{ inputs.ai-provider }}"
+        else
+          ARGS="$ARGS --no-ai"
+        fi
+
+        if [ "${{ inputs.enable-vulnerabilities }}" = "false" ]; then
+          ARGS="$ARGS --no-vuln"
+        fi
+
+        ARGS="$ARGS --output ${{ inputs.output-format }}"
+
+        # Run scan
+        set +e
+        security-scan scan $ARGS
+        SCAN_EXIT_CODE=$?
+        set -e
+
+        echo "exit_code=$SCAN_EXIT_CODE" >> $GITHUB_OUTPUT
+
+        # Parse results if report exists
+        if [ -f "output/report.json" ]; then
+          TOTAL_SECRETS=$(jq '.summary.total_secrets // 0' output/report.json)
+          TOTAL_VULNS=$(jq '.summary.total_vulnerabilities // 0' output/report.json)
+          CRITICAL_VULNS=$(jq '.summary.vulnerability_stats.by_severity.critical // 0' output/report.json)
+          HIGH_VULNS=$(jq '.summary.vulnerability_stats.by_severity.high // 0' output/report.json)
+
+          echo "total_secrets=$TOTAL_SECRETS" >> $GITHUB_OUTPUT
+          echo "total_vulnerabilities=$TOTAL_VULNS" >> $GITHUB_OUTPUT
+          echo "critical_vulnerabilities=$CRITICAL_VULNS" >> $GITHUB_OUTPUT
+          echo "high_vulnerabilities=$HIGH_VULNS" >> $GITHUB_OUTPUT
+
+          # Print summary
+          echo "==================================="
+          echo "Security Scan Results"
+          echo "==================================="
+          echo "Secrets Found: $TOTAL_SECRETS"
+          echo "Total Vulnerabilities: $TOTAL_VULNS"
+          echo "  Critical: $CRITICAL_VULNS"
+          echo "  High: $HIGH_VULNS"
+          echo "==================================="
+        else
+          echo "total_secrets=0" >> $GITHUB_OUTPUT
+          echo "total_vulnerabilities=0" >> $GITHUB_OUTPUT
+          echo "critical_vulnerabilities=0" >> $GITHUB_OUTPUT
+          echo "high_vulnerabilities=0" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Check Failure Conditions
+      shell: bash
+      run: |
+        SHOULD_FAIL=false
+
+        if [ "${{ inputs.fail-on-critical }}" = "true" ]; then
+          CRITICAL=${{ steps.scan.outputs.critical_vulnerabilities }}
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::Found $CRITICAL critical vulnerabilities"
+            SHOULD_FAIL=true
+          fi
+        fi
+
+        if [ "${{ inputs.fail-on-secrets }}" = "true" ]; then
+          SECRETS=${{ steps.scan.outputs.total_secrets }}
+          if [ "$SECRETS" -gt 0 ]; then
+            echo "::error::Found $SECRETS hardcoded secrets"
+            SHOULD_FAIL=true
+          fi
+        fi
+
+        if [ "$SHOULD_FAIL" = "true" ]; then
+          exit 1
+        fi
