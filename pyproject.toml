@@ -41,9 +41,27 @@ dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.11.0",
+    "httpx>=0.25.0",
     "black>=23.0.0",
     "flake8>=6.0.0",
     "mypy>=1.0.0",
+]
+server = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "websockets>=12.0",
+]
+all = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "httpx>=0.25.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "websockets>=12.0",
 ]
 
 [project.urls]
@@ -54,6 +72,7 @@ Issues = "https://github.com/ALxxy123/code-scan-sec/issues"
 
 [project.scripts]
 security-scan = "scanner:app"
+security-scan-server = "api_server:app"
 
 [tool.setuptools]
 packages = ["ai_providers"]
@@ -62,7 +81,10 @@ py-modules = [
     "config",
     "logger",
     "vulnerability_scanner",
-    "report_generator"
+    "report_generator",
+    "auto_fix",
+    "api_server",
+    "database"
 ]
 
 [tool.setuptools.package-data]

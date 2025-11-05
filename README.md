@@ -9,6 +9,8 @@
 ## ✨ What's New in v3.0
 
 🚀 **Major enhancements:**
+- 🔧 **Auto-Fix Engine** - Automatically fix common vulnerabilities (MD5→SHA256, secrets→env vars, etc.)
+- 🔄 **CI/CD Integration** - Ready-to-use GitHub Actions workflows for automated scanning
 - 🐛 **Advanced Vulnerability Detection** - Detects SQL Injection, XSS, Command Injection, and 50+ vulnerability types
 - 🤖 **Claude AI Support** - Added Anthropic Claude alongside Gemini and OpenAI
 - 📊 **Enhanced Reporting** - Beautiful HTML reports with severity breakdowns
@@ -21,6 +23,16 @@
 ---
 
 ## 🎯 Features
+
+### 🔧 Auto-Fix Engine
+- **Weak Cryptography**: Automatically upgrades MD5/SHA1 to SHA256
+- **Hardcoded Secrets**: Moves secrets to environment variables with .env.example generation
+- **SQL Injection**: Suggests parameterized queries
+- **Dangerous Functions**: Replaces eval() with ast.literal_eval(), warns about exec()
+- **XSS Vulnerabilities**: Suggests proper HTML escaping
+- **Interactive Mode**: Review each fix before applying
+- **Dry Run**: Preview changes without modifying files
+- **Automatic Backups**: Creates .backup files for safety
 
 ### 🔐 Secret Detection
 - **Hardcoded Credentials**: Passwords, API keys, tokens
@@ -39,6 +51,14 @@
 - **SSRF**: Server-side request forgery
 - **XXE**: XML external entity attacks
 - **50+ Detection Rules** based on OWASP Top 10 & CWE
+
+### 🌐 Web Dashboard & API
+- **FastAPI REST API**: RESTful API for scan management
+- **WebSocket Support**: Real-time scan progress updates
+- **Interactive Dashboard**: Modern web UI with live statistics
+- **Scan History**: Track all scans with detailed results
+- **Background Processing**: Asynchronous scan execution
+- **API Documentation**: Auto-generated OpenAPI/Swagger docs
 
 ### 🤖 AI Providers
 - **Google Gemini** (Fast & Accurate)
@@ -125,7 +145,36 @@ security-scan scan --path . --output all
 security-scan scan --path . --no-ai --quiet
 ```
 
-### 5. Install Git Pre-Commit Hook
+### 5. Auto-Fix Vulnerabilities
+```bash
+# Dry run - see what would be fixed
+security-scan auto-fix --path . --dry-run
+
+# Fix all issues interactively
+security-scan auto-fix --path ./src
+
+# Fix specific types only
+security-scan auto-fix --path . --fix-types crypto secrets
+
+# Non-interactive mode
+security-scan auto-fix --path . --no-interactive
+```
+
+### 6. Web Dashboard & API Server
+```bash
+# Install with server dependencies
+pip install "security-scan-cli[server]"
+
+# Start the API server
+python api_server.py
+# Or if installed globally
+uvicorn api_server:app --reload
+
+# Access dashboard at http://localhost:8000/dashboard.html
+# API docs at http://localhost:8000/docs
+```
+
+### 7. Install Git Pre-Commit Hook
 ```bash
 cd /your/git/repo
 security-scan install-hook
@@ -251,6 +300,54 @@ mypy .
 
 ---
 
+## 🔄 CI/CD Integration
+
+Integrate security scanning into your CI/CD pipeline:
+
+### GitHub Actions
+
+**Option 1: Use as GitHub Action (Easiest)**
+```yaml
+- name: Run Security Scanner
+  uses: ALxxy123/code-scan-sec@v3
+  with:
+    path: '.'
+    ai-provider: 'gemini'
+    gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+```
+
+**Option 2: Copy Pre-built Workflows**
+
+We provide two ready-to-use workflows:
+- `.github/workflows/security-scan.yml` - Full security scan on push
+- `.github/workflows/security-scan-pr.yml` - PR-specific scan
+
+Simply copy these to your `.github/workflows/` directory!
+
+**Option 3: Manual Setup**
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: actions/setup-python@v5
+  - run: pip install security-scan-cli
+  - run: security-scan scan --path . --ai-provider gemini
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+```
+
+### Other CI/CD Platforms
+
+We support all major CI/CD platforms:
+- GitLab CI
+- Jenkins
+- CircleCI
+- Azure Pipelines
+- Bitbucket Pipelines
+
+📖 **Full documentation**: [CI/CD Integration Guide](docs/CI-CD-INTEGRATION.md)
+
+---
+
 ## 🔒 Security Best Practices
 
 1. **Never commit secrets** - Use environment variables or secret managers
@@ -266,8 +363,10 @@ mypy .
 - **Installation Guide**: See [Installation](#installation)
 - **Usage Guide**: See [Usage Examples](#usage-examples)
 - **Configuration**: See [Configuration](#configuration)
+- **Feature Documentation**: See [docs/FEATURES-v3.md](docs/FEATURES-v3.md) - Comprehensive feature guide
+- **CI/CD Integration**: See [docs/CI-CD-INTEGRATION.md](docs/CI-CD-INTEGRATION.md) - CI/CD setup guide
 - **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md)
-- **API Reference**: Coming soon
+- **API Reference**: http://localhost:8000/docs (when server is running)
 
 ---
 
