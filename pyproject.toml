@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "security-scan-cli"
-version = "3.0.0"
+version = "3.1.0"
 authors = [
     { name = "Ahmed Mubaraki" }
 ]
-description = "Enhanced AI-Powered Security Scanner with Vulnerability Detection"
+description = "Enhanced AI-Powered Security Scanner with Beautiful Terminal UI, Auto-Fix, and Vulnerability Detection"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
