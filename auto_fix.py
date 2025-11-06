@@ -94,21 +94,28 @@ class AutoFix:
             ),
         ]
 
+        # Compile patterns once for performance
+        compiled_patterns = [
+            (re.compile(pattern), replacement, vuln_type, description)
+            for pattern, replacement, vuln_type, description in weak_crypto_patterns
+        ]
+
         for i, line in enumerate(lines):
-            for pattern, replacement, vuln_type, description in weak_crypto_patterns:
-                if re.search(pattern, line):
-                    fixed_line = re.sub(pattern, replacement, line)
-                    if fixed_line != line:
-                        fixes.append(Fix(
-                            file_path=file_path,
-                            line_number=i + 1,
-                            original_code=line.strip(),
-                            fixed_code=fixed_line.strip(),
-                            vulnerability_type=vuln_type,
-                            description=description,
-                            confidence='high'
-                        ))
-                        lines[i] = fixed_line
+            for compiled_pattern, replacement, vuln_type, description in compiled_patterns:
+                # Use sub() directly instead of search() then sub() (avoid double evaluation)
+                fixed_line = compiled_pattern.sub(replacement, line)
+                if fixed_line != line:
+                    fixes.append(Fix(
+                        file_path=file_path,
+                        line_number=i + 1,
+                        original_code=line.strip(),
+                        fixed_code=fixed_line.strip(),
+                        vulnerability_type=vuln_type,
+                        description=description,
+                        confidence='high'
+                    ))
+                    lines[i] = fixed_line
+                    break  # Only apply one fix per line to avoid conflicts
 
         return '\n'.join(lines), fixes
 
