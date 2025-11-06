@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import Counter
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, track
@@ -169,24 +170,28 @@ def load_ignore_patterns() -> Tuple[str, ...]:
 def calculate_entropy(text: str) -> float:
     """
     Calculate Shannon entropy of text for randomness detection.
-    
+
     Higher entropy indicates more randomness (likely a real secret).
-    
+
     Args:
         text: Text to calculate entropy for
-        
+
     Returns:
         float: Entropy value (0.0 to ~8.0 for ASCII)
     """
     if not text:
         return 0.0
-    
+
+    # Use Counter for O(n) complexity instead of O(n*m)
+    char_counts = Counter(text)
+    text_len = len(text)
+
     # Calculate character frequency probabilities
-    probabilities = [text.count(c) / len(text) for c in set(text)]
-    
+    probabilities = [count / text_len for count in char_counts.values()]
+
     # Shannon entropy formula
     entropy = -sum(p * math.log2(p) for p in probabilities if p > 0)
-    
+
     return entropy
 
 
@@ -251,23 +256,17 @@ def collect_files(
     ]
     
     all_ignores = default_ignores + (ignore_patterns or [])
-    
-    # Collect all files
-    all_files = list(target_path.rglob("*"))
+
+    # Use generator instead of loading all files into memory
+    # This is much more efficient for large directories
     files_to_scan = []
-    
-    for file_path in all_files:
+
+    for file_path in target_path.rglob("*"):
         if not file_path.is_file():
             continue
-            
-        # Check ignore patterns
-        should_ignore = False
-        for pattern in all_ignores:
-            if file_path.match(pattern):
-                should_ignore = True
-                break
-        
-        if not should_ignore:
+
+        # Check ignore patterns - use any() for early exit
+        if not any(file_path.match(pattern) for pattern in all_ignores):
             files_to_scan.append(file_path)
     
     logger.info(f"Found {len(files_to_scan)} files to scan")
@@ -514,12 +513,13 @@ def run_comprehensive_scan(
             task = progress.add_task("[cyan]🔍 Scanning for secrets...", total=total_files)
 
             for i, file_path in enumerate(files):
-                # Scan file
-                for rule in rules:
-                    try:
-                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                            content = f.read()
+                # Read file ONCE outside rule loop
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
 
+                    # Now scan with all rules on the already-loaded content
+                    for rule in rules:
                         for match in rule.finditer(content):
                             secrets_found.append({
                                 'file': file_path,
@@ -528,8 +528,8 @@ def run_comprehensive_scan(
                                 'type': 'Secret',
                                 'file_path': file_path
                             })
-                    except Exception as e:
-                        logger.debug(f"Error scanning {file_path}: {e}")
+                except Exception as e:
+                    logger.debug(f"Error scanning {file_path}: {e}")
 
                 progress.update(task, advance=1)
     else:
@@ -695,7 +695,6 @@ def print_welcome_banner() -> None:
     # Initialize config
     with console.status("[bold green]Initializing...", spinner="dots8Bit"):
         initialize_config()
-        time.sleep(0.5)
     
     console.print()
 

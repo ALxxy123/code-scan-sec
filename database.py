@@ -97,7 +97,11 @@ class Database:
             if not hasattr(self._local, 'conn') or self._local.conn is None:
                 self._local.conn = sqlite3.connect(self.db_path)
                 self._local.conn.row_factory = sqlite3.Row
-                logger.debug(f"Created new SQLite connection for thread {threading.current_thread().name}")
+                # Apply same optimizations to thread-local connections
+                self._local.conn.execute("PRAGMA journal_mode=WAL")
+                self._local.conn.execute("PRAGMA synchronous=NORMAL")
+                self._local.conn.execute("PRAGMA cache_size=-10000")
+                logger.debug(f"Created optimized SQLite connection for thread {threading.current_thread().name}")
             return self._local.conn
         else:
             # PostgreSQL connections are thread-safe
@@ -107,6 +111,14 @@ class Database:
         """Initialize SQLite connection (main connection for table creation)."""
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row  # Enable column access by name
+
+        # Enable Write-Ahead Logging (WAL) mode for better concurrency
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        # Synchronous mode for faster writes while maintaining safety
+        self.conn.execute("PRAGMA synchronous=NORMAL")
+        # Increase cache size for better performance (10MB)
+        self.conn.execute("PRAGMA cache_size=-10000")
+        logger.debug("SQLite optimizations enabled: WAL mode, NORMAL sync, 10MB cache")
 
     def _init_postgresql(self):
         """Initialize PostgreSQL connection."""
@@ -194,8 +206,19 @@ class Database:
             )
         """)
 
+        # Create indexes for better query performance
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_scans_scan_id ON scans(scan_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_scans_path ON scans(path)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_scans_start_time ON scans(start_time)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_scan_id ON secrets(scan_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_file_path ON secrets(file_path)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_vulnerabilities_scan_id ON vulnerabilities(scan_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_vulnerabilities_severity ON vulnerabilities(severity)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_vulnerabilities_file_path ON vulnerabilities(file_path)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_trends_date ON trends(date)")
+
         self.conn.commit()
-        logger.info("Database tables created/verified")
+        logger.info("Database tables and indexes created/verified")
 
     def save_scan(self, scan: ScanRecord) -> int:
         """
