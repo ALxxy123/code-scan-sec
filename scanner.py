@@ -609,10 +609,10 @@ def generate_reports(
     formats: List[str] = None,
     output_dir: str = "output",
     open_browser: bool = True
-) -> Dict[str, Path]:
+) -> Dict[str, str]:
     """
     Generate security scan reports in multiple formats.
-    
+
     Args:
         findings: Secret findings
         vulnerabilities: Vulnerability findings
@@ -620,45 +620,46 @@ def generate_reports(
         formats: Report formats to generate
         output_dir: Output directory
         open_browser: Open HTML report in browser
-        
+
     Returns:
-        Dict[str, Path]: Generated report paths
+        Dict[str, str]: Generated report paths (as strings)
     """
     logger.info(f"Generating reports: formats={formats}")
     config = get_config()
-    
+
     if formats is None:
         formats = config.report.default_formats
-    
+
     generator = ReportGenerator(output_dir)
     report_paths = {}
-    
+
     # Calculate affected files
     affected_files = len(set(f['file'] for f in findings))
     if vulnerabilities:
         affected_files += len(set(v.file_path for v in vulnerabilities))
-    
+
     # Generate requested formats
+    # Convert Path objects to strings for JSON serialization
     if "text" in formats:
-        report_paths["text"] = generator.write_text_report(findings, vulnerabilities)
-    
+        report_paths["text"] = str(generator.write_text_report(findings, vulnerabilities))
+
     if "json" in formats:
-        report_paths["json"] = generator.write_json_report(findings, vulnerabilities, vuln_stats)
-    
+        report_paths["json"] = str(generator.write_json_report(findings, vulnerabilities, vuln_stats))
+
     if "markdown" in formats:
-        report_paths["markdown"] = generator.write_md_report(
+        report_paths["markdown"] = str(generator.write_md_report(
             findings, affected_files, vulnerabilities, vuln_stats
-        )
-    
+        ))
+
     if "html" in formats:
         html_path = generator.write_html_report(
             findings, affected_files, vulnerabilities, vuln_stats
         )
-        report_paths["html"] = html_path
-        
+        report_paths["html"] = str(html_path)
+
         if open_browser and config.report.auto_open_browser:
             generator.open_in_browser(html_path)
-    
+
     logger.info(f"Generated {len(report_paths)} reports")
     return report_paths
 

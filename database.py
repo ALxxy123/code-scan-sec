@@ -18,6 +18,15 @@ from logger import get_logger
 logger = get_logger()
 
 
+class PathJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles Path objects."""
+
+    def default(self, obj):
+        if isinstance(obj, Path):
+            return str(obj)
+        return super().default(obj)
+
+
 @dataclass
 class ScanRecord:
     """Represents a scan record in the database."""
@@ -484,7 +493,7 @@ class Database:
             data[table] = [dict(row) for row in cursor.fetchall()]
 
         with open(output_path, 'w') as f:
-            json.dump(data, f, indent=2)
+            json.dump(data, f, indent=2, cls=PathJSONEncoder)
 
         logger.info(f"Database exported to {output_path}")
 
