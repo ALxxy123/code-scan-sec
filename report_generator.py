@@ -18,6 +18,15 @@ from vulnerability_scanner import Vulnerability
 logger = get_logger()
 
 
+class PathJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles Path objects."""
+
+    def default(self, obj):
+        if isinstance(obj, Path):
+            return str(obj)
+        return super().default(obj)
+
+
 class ReportGenerator:
     """
     Generates security scan reports in multiple formats.
@@ -135,7 +144,7 @@ class ReportGenerator:
                 report_data["vulnerabilities"] = [v.to_dict() for v in vulnerabilities]
 
             with open(report_path, "w", encoding="utf-8") as f:
-                json.dump(report_data, f, indent=2, ensure_ascii=False)
+                json.dump(report_data, f, indent=2, ensure_ascii=False, cls=PathJSONEncoder)
 
             logger.info("JSON report generated successfully")
             return report_path
