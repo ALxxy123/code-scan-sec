@@ -1,10 +1,18 @@
 # 🛡️ Enhanced AI-Powered Security Scanner
 
-[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/ALxxy123/code-scan-sec)
+[![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)](https://github.com/ALxxy123/code-scan-sec)
 [![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
 **The most advanced open-source security scanner** that detects hardcoded secrets, API keys, passwords, **AND** security vulnerabilities using AI-powered verification.
+
+## ✨ What's New in v3.2.0
+
+🚀 **Major new features:**
+- 🌐 **Remote URL Scanning** - Scan GitHub repos, GitLab projects, and archives directly from URLs
+- 🎯 **Black Box Testing** - Comprehensive web application security testing (SQL injection, XSS, security headers, etc.)
+- 📊 **Performance Benchmarking** - Track scan performance, resource usage, and compare with baselines
+- ⚡ **Enhanced Performance** - Optimized scanning with detailed metrics and monitoring
 
 ## ✨ What's New in v3.1.0
 
@@ -28,6 +36,33 @@
 ---
 
 ## 🎯 Features
+
+### 🌐 Remote URL Scanning (NEW in v3.2!)
+- **Git Repository Cloning**: Clone and scan repositories from GitHub, GitLab, Bitbucket, etc.
+- **Archive Support**: Download and scan zip, tar.gz, tar.bz2, tar.xz archives
+- **Automatic Cleanup**: Temporary files cleaned up automatically
+- **Progress Tracking**: Visual progress bars for downloads and cloning
+- **Shallow Cloning**: Fast shallow clones for quick scans
+- **All Scan Features**: Full secret detection and vulnerability scanning on remote code
+
+### 🎯 Black Box Testing (NEW in v3.2!)
+- **Security Headers**: Comprehensive security header analysis (HSTS, CSP, X-Frame-Options, etc.)
+- **SSL/TLS Testing**: Certificate validation, TLS version checks, cipher strength
+- **SQL Injection**: Automated SQL injection testing with multiple payloads
+- **XSS Detection**: Cross-site scripting vulnerability testing (reflected, stored)
+- **Path Traversal**: Directory traversal vulnerability detection
+- **Command Injection**: OS command injection testing
+- **Cookie Security**: Secure and HttpOnly flag validation
+- **Detailed Reports**: JSON and HTML reports with remediation guidance
+
+### 📊 Performance Benchmarking (NEW in v3.2!)
+- **Comprehensive Metrics**: Duration, throughput, CPU, memory usage tracking
+- **Historical Tracking**: Save and compare benchmark results over time
+- **Baseline Comparison**: Compare current scan with historical baselines
+- **AI Performance**: Track AI API response times and call counts
+- **Resource Monitoring**: Real-time CPU and memory usage monitoring
+- **Optimization Insights**: Identify performance bottlenecks and improvements
+- **Beautiful Reports**: Rich terminal output with comparison tables
 
 ### 🔧 Auto-Fix Engine
 - **Weak Cryptography**: Automatically upgrades MD5/SHA1 to SHA256
@@ -275,7 +310,80 @@ security-scan scan --path . --no-ai --output html
 
 ## 💻 Usage Examples
 
-### 🎨 New UI Features
+### 🌐 New in v3.2.0 - Remote URL Scanning
+
+#### 1. Scan a GitHub Repository
+```bash
+# Scan a public GitHub repository
+security-scan scan-url https://github.com/username/repo
+
+# With AI verification
+export GEMINI_API_KEY="your-key"
+security-scan scan-url https://github.com/username/repo --ai-provider gemini
+
+# Full scan with all reports
+security-scan scan-url https://github.com/username/repo --output all
+```
+
+#### 2. Scan a GitLab Project
+```bash
+security-scan scan-url https://gitlab.com/username/project
+```
+
+#### 3. Scan from Archive URL
+```bash
+# Scan a zip archive
+security-scan scan-url https://example.com/project.zip
+
+# Scan a tar.gz archive
+security-scan scan-url https://example.com/release.tar.gz
+```
+
+### 🎯 Black Box Testing
+
+#### 4. Test Web Application Security
+```bash
+# Basic black box test
+security-scan blackbox https://example.com
+
+# With custom timeout and JSON output
+security-scan blackbox https://app.example.com --timeout 15 --output json
+
+# Full test with HTML report
+security-scan blackbox https://api.example.com --output html
+```
+
+**Tests include:**
+- ✅ Security headers analysis (HSTS, CSP, X-Frame-Options, etc.)
+- ✅ SSL/TLS configuration testing
+- ✅ SQL injection detection
+- ✅ XSS (Cross-Site Scripting) testing
+- ✅ Path traversal vulnerability detection
+- ✅ Command injection testing
+- ✅ Cookie security analysis
+
+### 📊 Performance Benchmarking
+
+#### 5. Benchmark Your Scans
+```bash
+# Run benchmark on a project
+security-scan benchmark-scan /path/to/project
+
+# Create a named baseline
+security-scan benchmark-scan /path/to/project --name "baseline-v1"
+
+# Run without comparison
+security-scan benchmark-scan /path/to/project --no-compare
+```
+
+**Metrics tracked:**
+- ⚡ Scan duration and throughput (files/sec, lines/sec)
+- 💾 Peak memory usage
+- 🔄 CPU utilization
+- 🤖 AI API performance (response times, call count)
+- 📈 Historical comparisons and trend analysis
+
+### 🎨 UI Features (v3.1.0)
 
 #### 1. See the Beautiful Demo
 Perfect for first-time users or presentations:
