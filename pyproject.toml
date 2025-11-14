@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "security-scan-cli"
-version = "3.1.0"
+version = "3.2.0"
 authors = [
     { name = "Ahmed Mubaraki" }
 ]
-description = "Enhanced AI-Powered Security Scanner with Beautiful Terminal UI, Auto-Fix, and Vulnerability Detection"
+description = "Enhanced AI-Powered Security Scanner with URL Scanning, Black Box Testing, Benchmarking, Beautiful Terminal UI, Auto-Fix, and Vulnerability Detection"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
@@ -34,6 +34,8 @@ dependencies = [
     "google-generativeai>=0.3.0",
     "openai>=1.0.0",
     "anthropic>=0.7.0",
+    "requests>=2.31.0",
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
@@ -85,7 +87,10 @@ py-modules = [
     "auto_fix",
     "api_server",
     "database",
-    "ui_components"
+    "ui_components",
+    "url_scanner",
+    "blackbox_tester",
+    "benchmark"
 ]
 
 [tool.setuptools.package-data]

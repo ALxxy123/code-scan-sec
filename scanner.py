@@ -5,8 +5,11 @@ This is a comprehensive security scanner that detects:
 - Hardcoded secrets, API keys, passwords, and credentials
 - Security vulnerabilities (SQL Injection, XSS, Command Injection, etc.)
 - Uses AI verification to reduce false positives
+- Remote URL scanning (GitHub, GitLab, archives)
+- Black box web application testing
+- Performance benchmarking and metrics
 
-Version: 3.0.0
+Version: 3.2.0
 Author: Ahmed Mubaraki
 """
 
@@ -38,6 +41,9 @@ from vulnerability_scanner import VulnerabilityScanner, scan_for_vulnerabilities
 from report_generator import ReportGenerator
 from auto_fix import AutoFix, auto_fix_directory
 from ui_components import BeautifulUI
+from url_scanner import URLScanner, scan_remote_url
+from blackbox_tester import BlackBoxTester, run_blackbox_test
+from benchmark import Benchmark, PerformanceMonitor, run_benchmark
 
 # Import AI providers
 from ai_providers.gemini_provider import GeminiProvider
@@ -1108,6 +1114,335 @@ def demo():
 
     console.print("\n[bold green]✨ Ready to scan your code?[/bold green]")
     console.print("Try: [cyan]security-scan interactive[/cyan]\n")
+
+
+@app.command()
+def scan_url(
+    url: str = typer.Argument(..., help="URL of remote repository or project"),
+    shallow: bool = typer.Option(True, help="Use shallow clone for git repos (faster)"),
+    ai_provider: Optional[str] = typer.Option(None, "--ai-provider", help="AI provider (gemini/openai/claude)"),
+    output: str = typer.Option("text", "--output", help="Output format (text/json/html/md/all)"),
+    no_ai: bool = typer.Option(False, "--no-ai", help="Disable AI verification"),
+    no_vuln: bool = typer.Option(False, "--no-vuln", help="Disable vulnerability scanning"),
+):
+    """
+    🌐 Scan a remote repository or project from URL.
+
+    Supports:
+    - Git repositories (GitHub, GitLab, Bitbucket, etc.)
+    - Archive files (zip, tar.gz, etc.)
+    - Direct file URLs
+
+    Examples:
+    - security-scan scan-url https://github.com/user/repo
+    - security-scan scan-url https://example.com/project.zip
+    - security-scan scan-url https://gitlab.com/user/project --ai-provider gemini
+    """
+    try:
+        initialize_config()
+        BeautifulUI.show_welcome_screen()
+
+        console.print(Panel.fit(
+            f"[bold cyan]🌐 Remote URL Scan[/bold cyan]\n"
+            f"Target: {url}",
+            border_style="cyan"
+        ))
+
+        # Download/clone the remote resource
+        with URLScanner() as url_scanner:
+            console.print(f"\n[cyan]📥 Downloading remote project...[/cyan]")
+            local_path = url_scanner.scan_url(url, shallow=shallow)
+
+            # Now scan it
+            console.print(f"\n[cyan]🔍 Scanning downloaded project...[/cyan]\n")
+
+            # Call the main scan function (we'll need to import the actual scan logic)
+            from pathlib import Path
+
+            # Collect files
+            ignore_patterns = load_ignore_patterns()
+            files_to_scan = collect_files(str(local_path), ignore_patterns)
+
+            if not files_to_scan:
+                console.print("[yellow]No files found to scan[/yellow]")
+                return
+
+            # Load rules
+            patterns = load_rules()
+
+            # Scan for secrets
+            console.print(f"[cyan]🔍 Scanning {len(files_to_scan)} files for secrets...[/cyan]")
+            all_secrets = []
+
+            for file_path in track(files_to_scan, description="Scanning files..."):
+                secrets = scan_file_for_secrets(file_path, patterns)
+                all_secrets.extend(secrets)
+
+            console.print(f"[green]✓ Found {len(all_secrets)} potential secrets[/green]")
+
+            # Filter by entropy and AI verification
+            config = get_config()
+            filtered_secrets = filter_by_entropy(all_secrets, config['scan']['entropy_threshold'])
+
+            verified_secrets = []
+            if not no_ai and ai_provider:
+                verified_secrets = verify_with_ai(filtered_secrets, ai_provider)
+            else:
+                verified_secrets = filtered_secrets
+
+            # Scan for vulnerabilities
+            vulnerabilities = []
+            if not no_vuln:
+                console.print(f"\n[cyan]🐛 Scanning for vulnerabilities...[/cyan]")
+                vulnerabilities = scan_for_vulnerabilities(str(local_path))
+                console.print(f"[green]✓ Found {len(vulnerabilities)} vulnerabilities[/green]")
+
+            # Generate reports
+            console.print(f"\n[cyan]📊 Generating reports...[/cyan]")
+            output_dir = Path("output")
+            output_dir.mkdir(exist_ok=True)
+
+            report_gen = ReportGenerator(output_dir)
+
+            # Calculate stats
+            stats = {
+                'total_files_scanned': len(files_to_scan),
+                'vulnerability_stats': {
+                    'by_severity': {},
+                    'by_category': {}
+                }
+            }
+
+            if output in ["text", "all"]:
+                BeautifulUI.show_scan_summary(verified_secrets, vulnerabilities, stats, 0)
+
+            if output in ["json", "all"]:
+                report_gen.generate_json_report(verified_secrets, vulnerabilities, "url_scan_report.json")
+
+            if output in ["html", "all"]:
+                report_gen.generate_html_report(verified_secrets, vulnerabilities, "url_scan_report.html")
+
+            console.print(f"\n[green]✅ Remote URL scan completed![/green]")
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Scan interrupted by user[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        logger.exception("URL scan failed")
+        console.print(f"\n[red]Error: {e}[/red]")
+        sys.exit(1)
+
+
+@app.command()
+def blackbox(
+    url: str = typer.Argument(..., help="Target web application URL"),
+    timeout: int = typer.Option(10, "--timeout", help="Request timeout in seconds"),
+    output: str = typer.Option("text", "--output", help="Output format (text/json/html)"),
+):
+    """
+    🎯 Perform black box security testing on a web application.
+
+    Tests include:
+    - Security headers analysis
+    - SSL/TLS configuration
+    - SQL injection detection
+    - XSS vulnerability testing
+    - Path traversal testing
+    - Command injection testing
+
+    Examples:
+    - security-scan blackbox https://example.com
+    - security-scan blackbox https://app.example.com --timeout 15
+    - security-scan blackbox https://api.example.com --output json
+    """
+    try:
+        BeautifulUI.show_welcome_screen()
+
+        console.print(Panel.fit(
+            f"[bold cyan]🎯 Black Box Security Testing[/bold cyan]\n"
+            f"Target: {url}\n"
+            f"Timeout: {timeout}s",
+            border_style="cyan"
+        ))
+
+        # Run black box tests
+        tester = BlackBoxTester(url, timeout=timeout)
+        results = tester.run_all_tests()
+
+        # Generate reports
+        if output in ["json", "all"]:
+            output_dir = Path("output")
+            output_dir.mkdir(exist_ok=True)
+            output_file = output_dir / "blackbox_report.json"
+
+            import json
+            with open(output_file, 'w') as f:
+                json.dump(results, f, indent=2, default=str)
+
+            console.print(f"[green]✓ JSON report saved to: {output_file}[/green]")
+
+        if output in ["html", "all"]:
+            output_dir = Path("output")
+            output_dir.mkdir(exist_ok=True)
+            output_file = output_dir / "blackbox_report.html"
+
+            # Generate simple HTML report
+            html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Black Box Security Test Report</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; }}
+        h1 {{ color: #2c3e50; }}
+        .issue {{ margin: 20px 0; padding: 15px; border-left: 4px solid #e74c3c; background: #f9f9f9; }}
+        .critical {{ border-color: #e74c3c; }}
+        .high {{ border-color: #e67e22; }}
+        .medium {{ border-color: #f39c12; }}
+        .low {{ border-color: #3498db; }}
+        .summary {{ background: #ecf0f1; padding: 20px; margin: 20px 0; }}
+    </style>
+</head>
+<body>
+    <h1>Black Box Security Test Report</h1>
+    <div class="summary">
+        <p><strong>Target:</strong> {results['target_url']}</p>
+        <p><strong>Scan Date:</strong> {results['scan_date']}</p>
+        <p><strong>Duration:</strong> {results['duration_seconds']:.2f}s</p>
+        <p><strong>Total Issues:</strong> {results['total_issues']}</p>
+    </div>
+    <h2>Issues Found</h2>
+"""
+            for issue in results['issues']:
+                severity = issue.get('severity', 'low')
+                html_content += f"""
+    <div class="issue {severity}">
+        <h3>{issue.get('type', 'Unknown')} - {severity.upper()}</h3>
+        <p><strong>Description:</strong> {issue.get('description', 'N/A')}</p>
+        <p><strong>Recommendation:</strong> {issue.get('recommendation', 'N/A')}</p>
+    </div>
+"""
+
+            html_content += """
+</body>
+</html>
+"""
+
+            with open(output_file, 'w') as f:
+                f.write(html_content)
+
+            console.print(f"[green]✓ HTML report saved to: {output_file}[/green]")
+
+        console.print(f"\n[green]✅ Black box testing completed![/green]")
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Test interrupted by user[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        logger.exception("Black box testing failed")
+        console.print(f"\n[red]Error: {e}[/red]")
+        sys.exit(1)
+
+
+@app.command()
+def benchmark_scan(
+    path: str = typer.Argument(..., help="Path to scan"),
+    name: str = typer.Option("benchmark", "--name", help="Benchmark name"),
+    compare: bool = typer.Option(True, "--compare/--no-compare", help="Compare with baseline"),
+):
+    """
+    📊 Run performance benchmark on a scan.
+
+    This command runs a full scan while collecting detailed performance metrics:
+    - Scan duration and throughput
+    - CPU and memory usage
+    - Files and lines processed per second
+    - AI API performance (if enabled)
+
+    Results are saved to benchmark history for comparison.
+
+    Examples:
+    - security-scan benchmark /path/to/project
+    - security-scan benchmark /path/to/project --name "baseline"
+    - security-scan benchmark /path/to/project --no-compare
+    """
+    try:
+        initialize_config()
+        BeautifulUI.show_welcome_screen()
+
+        console.print(Panel.fit(
+            f"[bold cyan]📊 Performance Benchmark[/bold cyan]\n"
+            f"Name: {name}\n"
+            f"Path: {path}",
+            border_style="cyan"
+        ))
+
+        # Initialize monitor
+        monitor = PerformanceMonitor(scan_name=name)
+        bench = Benchmark()
+
+        # Start monitoring
+        monitor.start()
+
+        # Collect files
+        ignore_patterns = load_ignore_patterns()
+        files_to_scan = collect_files(path, ignore_patterns)
+
+        if not files_to_scan:
+            console.print("[yellow]No files found to scan[/yellow]")
+            return
+
+        # Load rules
+        patterns = load_rules()
+
+        # Scan files
+        all_secrets = []
+        for file_path in track(files_to_scan, description="Scanning files..."):
+            secrets = scan_file_for_secrets(file_path, patterns)
+            all_secrets.extend(secrets)
+
+            # Update monitor
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    line_count = sum(1 for _ in f)
+                monitor.record_file_scanned(line_count)
+            except:
+                monitor.record_file_scanned(0)
+
+        # Filter secrets
+        config = get_config()
+        filtered_secrets = filter_by_entropy(all_secrets, config['scan']['entropy_threshold'])
+
+        for _ in filtered_secrets:
+            monitor.record_secret_found()
+
+        # Scan for vulnerabilities
+        vulnerabilities = scan_for_vulnerabilities(path)
+        for _ in vulnerabilities:
+            monitor.record_vulnerability_found()
+
+        # Stop monitoring
+        metrics = monitor.stop()
+
+        # Save and compare
+        bench.add_result(metrics)
+
+        comparison = None
+        if compare:
+            comparison = bench.compare_with_baseline(metrics)
+
+        bench.display_metrics(metrics, comparison)
+
+        console.print(f"\n[green]✅ Benchmark completed![/green]")
+        console.print(f"Results saved to: {bench.results_file}")
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Benchmark interrupted by user[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        logger.exception("Benchmark failed")
+        console.print(f"\n[red]Error: {e}[/red]")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
