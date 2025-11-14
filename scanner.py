@@ -1445,6 +1445,76 @@ def benchmark_scan(
         sys.exit(1)
 
 
+@app.command()
+def dashboard(
+    enhanced: bool = typer.Option(True, "--enhanced/--basic", help="Use enhanced multi-language dashboard")
+):
+    """
+    🌐 Open the web dashboard in your browser.
+
+    Launch the API server and open the interactive web dashboard.
+    The enhanced dashboard includes:
+    - Multi-language support (Arabic/English)
+    - Interactive configuration wizard
+    - Getting started guide
+    - Feature showcase
+    - Real-time statistics
+
+    Examples:
+    - security-scan dashboard
+    - security-scan dashboard --basic
+    """
+    try:
+        import webbrowser
+        import threading
+        import uvicorn
+
+        # Determine which dashboard to use
+        dashboard_file = "dashboard_enhanced.html" if enhanced else "dashboard.html"
+        dashboard_name = "Enhanced" if enhanced else "Basic"
+
+        console.print(Panel.fit(
+            f"[bold cyan]🌐 {dashboard_name} Web Dashboard[/bold cyan]\n"
+            f"Starting API server on http://localhost:8000\n"
+            f"Dashboard: {dashboard_file}",
+            border_style="cyan"
+        ))
+
+        # Open browser after a short delay
+        def open_browser():
+            time.sleep(2)
+            url = f"http://localhost:8000/{dashboard_file}"
+            console.print(f"[green]Opening {url} in browser...[/green]")
+            webbrowser.open(url)
+
+        browser_thread = threading.Thread(target=open_browser, daemon=True)
+        browser_thread.start()
+
+        # Start server
+        console.print("\n[yellow]Starting server...[/yellow]")
+        console.print("[dim]Press Ctrl+C to stop[/dim]\n")
+
+        # Import api_server
+        try:
+            from api_server import app as api_app
+            uvicorn.run(api_app, host="0.0.0.0", port=8000, log_level="info")
+        except ImportError:
+            console.print("[red]Error: API server not found. Please ensure api_server.py exists.[/red]")
+            console.print("[yellow]You can still access the dashboard by running:[/yellow]")
+            console.print("  python api_server.py")
+            sys.exit(1)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped by user[/yellow]")
+        sys.exit(0)
+    except Exception as e:
+        logger.exception("Failed to start dashboard")
+        console.print(f"\n[red]Error: {e}[/red]")
+        console.print("\n[yellow]Try running the server manually:[/yellow]")
+        console.print("  python api_server.py")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     try:
         app()
