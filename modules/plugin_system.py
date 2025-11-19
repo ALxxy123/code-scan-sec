@@ -4,7 +4,7 @@ Extensible architecture allowing custom plugins for scanning and analysis
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Type
+from typing import List, Dict, Any, Optional, Type, Tuple
 from pathlib import Path
 import importlib.util
 import inspect

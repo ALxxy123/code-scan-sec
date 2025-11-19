@@ -6,7 +6,7 @@ Advanced rule management with custom rules support
 import re
 import yaml
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional, Set, Tuple
 from functools import lru_cache
 from .data_models import CustomRule, SeverityLevel
 

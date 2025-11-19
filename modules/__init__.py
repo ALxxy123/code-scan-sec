@@ -22,7 +22,7 @@ from .data_models import (
 from .local_scanner import LocalScanner
 from .url_scanner_enhanced import URLScannerEnhanced
 from .blackbox_scanner import BlackBoxScanner
-from .benchmark_engine import BenchmarkEngine
+from .benchmark_engine import BenchmarkEngine, PerformanceMonitor
 from .pdf_generator import PDFReportGenerator
 from .csv_exporter import CSVExporter
 from .plugin_system import PluginManager, BasePlugin
@@ -44,6 +44,7 @@ __all__ = [
     "URLScannerEnhanced",
     "BlackBoxScanner",
     "BenchmarkEngine",
+    "PerformanceMonitor",
 
     # Report & Export
     "PDFReportGenerator",
