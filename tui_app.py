@@ -233,7 +233,7 @@ class MainMenuScreen(Screen):
             with Center(id="menu-container"):
                 with Container(classes="menu-box"):
                     yield Static("🎯 MAIN MENU", classes="scan-title")
-                    yield Rule(style="dim")
+                    yield Rule()
                     
                     yield Button("🔍  [1]  Scan Local Project", id="btn-1", classes="menu-button")
                     yield Button("🌐  [2]  Scan Git Repository", id="btn-2", classes="menu-button")
@@ -241,7 +241,7 @@ class MainMenuScreen(Screen):
                     yield Button("🔧  [4]  Auto Fix Issues", id="btn-4", classes="menu-button")
                     yield Button("📊  [5]  View Reports", id="btn-5", classes="menu-button")
                     
-                    yield Rule(style="dim")
+                    yield Rule()
                     yield Button("🚪  [Q]  Exit", id="btn-quit", classes="menu-button quit-button")
             
             yield Static("💡 Press number keys [1-5] or click • [Q] or [ESC] to quit", classes="tips")
@@ -297,7 +297,7 @@ class ScanScreen(Screen):
         
         with Vertical(classes="scan-container"):
             yield Static("🔍 SCAN LOCAL PROJECT", classes="scan-title")
-            yield Rule(style="green")
+            yield Rule()
             
             with Container(classes="input-group"):
                 yield Label("📁 Project Path:", classes="input-label")
@@ -314,7 +314,7 @@ class ScanScreen(Screen):
             
             with Container(classes="log-container"):
                 yield Static("📋 OUTPUT LOG", classes="log-title")
-                yield Rule(style="dim")
+                yield Rule()
                 yield RichLog(id="log", highlight=True, markup=True, wrap=True)
         
         yield Static("💡 [Ctrl+S] to start scan • [ESC] to go back", classes="footer-tips")
@@ -471,7 +471,7 @@ class URLScreen(Screen):
         
         with Vertical(classes="scan-container"):
             yield Static("🌐 SCAN GIT REPOSITORY", classes="scan-title")
-            yield Rule(style="cyan")
+            yield Rule()
             
             with Container(classes="input-group"):
                 yield Label("📎 Repository URL:", classes="input-label")
@@ -486,7 +486,7 @@ class URLScreen(Screen):
             
             with Container(classes="log-container"):
                 yield Static("📋 OUTPUT", classes="log-title")
-                yield Rule(style="dim")
+                yield Rule()
                 yield RichLog(id="log", highlight=True, markup=True)
         
         yield Static("💡 Enter a GitHub/GitLab URL to scan • [ESC] to go back", classes="footer-tips")
@@ -523,7 +523,7 @@ class BlackBoxScreen(Screen):
         
         with Vertical(classes="scan-container"):
             yield Static("🎯 BLACK BOX TESTING", classes="scan-title")
-            yield Rule(style="red")
+            yield Rule()
             
             with Container(classes="input-group"):
                 yield Label("🌐 Target URL:", classes="input-label")
@@ -538,7 +538,7 @@ class BlackBoxScreen(Screen):
             
             with Container(classes="log-container"):
                 yield Static("📋 TEST RESULTS", classes="log-title")
-                yield Rule(style="dim")
+                yield Rule()
                 yield RichLog(id="log", highlight=True, markup=True)
         
         yield Static("💡 Enter a website URL to test security • [ESC] to go back", classes="footer-tips")
@@ -575,7 +575,7 @@ class AutoFixScreen(Screen):
         
         with Vertical(classes="scan-container"):
             yield Static("🔧 AUTO FIX VULNERABILITIES", classes="scan-title")
-            yield Rule(style="yellow")
+            yield Rule()
             
             with Container(classes="input-group"):
                 yield Label("📁 Project Path:", classes="input-label")
@@ -588,7 +588,7 @@ class AutoFixScreen(Screen):
             
             with Container(classes="log-container"):
                 yield Static("📋 FIX LOG", classes="log-title")
-                yield Rule(style="dim")
+                yield Rule()
                 yield RichLog(id="log", highlight=True, markup=True)
         
         yield Static("💡 Preview fixes before applying • [ESC] to go back", classes="footer-tips")
@@ -624,11 +624,11 @@ class ReportsScreen(Screen):
         
         with Vertical(classes="scan-container"):
             yield Static("📊 SCAN REPORTS", classes="scan-title")
-            yield Rule(style="blue")
+            yield Rule()
             
             with Container(classes="log-container"):
                 yield Static("📁 Reports Directory: ./output/", classes="log-title")
-                yield Rule(style="dim")
+                yield Rule()
                 yield RichLog(id="log", highlight=True, markup=True)
             
             with Horizontal(classes="button-row"):
