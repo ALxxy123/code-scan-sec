@@ -1,139 +1,208 @@
 """
-🛡️ Security Scanner - Interactive TUI Application
-Professional Terminal User Interface like Claude Code
+🛡️ Security Scanner - Professional Interactive TUI
+A beautiful terminal interface for security scanning
 """
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
+from textual.containers import Container, Horizontal, Vertical, Center
 from textual.widgets import (
     Header, Footer, Static, Button, Input, 
-    Label, ProgressBar, DataTable, ListView, ListItem,
-    DirectoryTree, RichLog, Select, Switch, Rule
+    Label, ProgressBar, RichLog, Rule, Placeholder
 )
 from textual.binding import Binding
 from textual.screen import Screen
-from textual import events
 from rich.text import Text
 from rich.panel import Panel
-from rich.console import Console
-from rich.table import Table
+from rich.align import Align
 from pathlib import Path
 import asyncio
 import sys
 import os
+import subprocess
 
-# Add parent directory to path for imports
+# Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 
 # ============================================================================
-# STYLES
+# STYLES - Modern Dark Theme
 # ============================================================================
 
 CSS = """
 Screen {
-    background: $surface;
+    background: #0f0f23;
 }
 
-#main-container {
-    width: 100%;
-    height: 100%;
+#app-grid {
+    layout: grid;
+    grid-size: 1;
+    grid-rows: auto 1fr auto;
+    padding: 1 2;
+}
+
+.banner {
+    text-align: center;
     padding: 1;
+    color: #00ff88;
+    text-style: bold;
+}
+
+.banner-sub {
+    text-align: center;
+    color: #888888;
+    padding-bottom: 1;
+}
+
+#menu-container {
+    align: center middle;
+    width: 100%;
+    height: auto;
 }
 
 .menu-box {
-    border: solid $primary;
+    width: 60;
+    border: heavy #00ff88;
+    border-title-align: center;
+    background: #1a1a2e;
     padding: 1 2;
-    margin: 1;
-    background: $surface-darken-1;
 }
 
-.menu-item {
-    padding: 1 2;
-    margin: 0 1;
+.menu-button {
     width: 100%;
-}
-
-.menu-item:hover {
-    background: $primary-darken-1;
-}
-
-.menu-item:focus {
-    background: $primary;
-    text-style: bold;
-}
-
-.title {
-    text-align: center;
-    text-style: bold;
-    color: $primary;
-    padding: 1;
-}
-
-.subtitle {
-    text-align: center;
-    color: $text-muted;
-}
-
-.status-bar {
-    dock: bottom;
+    margin: 1 0;
     height: 3;
-    padding: 1;
-    background: $surface-darken-2;
 }
 
-.scan-panel {
-    border: solid $success;
-    padding: 1;
-    margin: 1;
+.menu-button:hover {
+    background: #00ff88 20%;
 }
 
-.result-panel {
-    border: solid $warning;
-    padding: 1;
-    margin: 1;
-    height: 100%;
+.menu-button:focus {
+    background: #00ff88;
+    color: #0f0f23;
+    text-style: bold;
 }
 
-.stat-card {
-    border: round $primary;
-    padding: 1;
-    margin: 0 1;
-    min-width: 20;
+.quit-button {
+    background: #ff4444 20%;
+}
+
+.quit-button:hover {
+    background: #ff4444 40%;
+}
+
+.quit-button:focus {
+    background: #ff4444;
+    color: white;
+}
+
+.tips {
     text-align: center;
+    color: #666666;
+    padding: 1;
 }
 
-.critical {
-    color: $error;
+/* Scan Screen Styles */
+.scan-container {
+    padding: 1 2;
 }
 
-.high {
-    color: #ff6b6b;
+.scan-title {
+    text-align: center;
+    color: #00ff88;
+    text-style: bold;
+    padding: 1;
 }
 
-.medium {
-    color: $warning;
+.input-group {
+    padding: 1;
+    border: solid #333;
+    margin: 1 0;
+    background: #1a1a2e;
 }
 
-.low {
-    color: $success;
+.input-label {
+    color: #00ff88;
+    padding: 0 0 1 0;
 }
 
 #path-input {
-    margin: 1;
+    background: #0f0f23;
+    border: solid #333;
 }
 
-Button {
-    margin: 1;
+#path-input:focus {
+    border: solid #00ff88;
 }
 
-.action-button {
-    min-width: 20;
+.button-row {
+    align: center middle;
+    height: auto;
+    padding: 1;
 }
 
-Input {
+.action-btn {
+    margin: 0 1;
+    min-width: 16;
+}
+
+.primary-btn {
+    background: #00ff88;
+    color: #0f0f23;
+}
+
+.primary-btn:hover {
+    background: #00cc66;
+}
+
+.secondary-btn {
+    background: #333;
+    color: #fff;
+}
+
+.secondary-btn:hover {
+    background: #444;
+}
+
+.log-container {
+    border: solid #333;
+    background: #0a0a1a;
+    height: 100%;
     margin: 1 0;
+    padding: 1;
 }
+
+.log-title {
+    text-align: center;
+    color: #ffaa00;
+    padding: 0 0 1 0;
+}
+
+/* Footer */
+.footer-tips {
+    dock: bottom;
+    text-align: center;
+    color: #555;
+    padding: 1;
+    background: #0a0a15;
+}
+"""
+
+
+# ============================================================================
+# ASCII ART BANNER
+# ============================================================================
+
+BANNER = """
+[bold green]
+   _____ ______ _____ _    _ ____  _____ _______ __   __
+  / ____|  ____/ ____| |  | |  _ \\|_   _|__   __|\\ \\ / /
+ | (___ | |__ | |    | |  | | |_) | | |    | |    \\ V / 
+  \\___ \\|  __|| |    | |  | |  _ <  | |    | |     > <  
+  ____) | |___| |____| |__| | |_) |_| |_   | |    / . \\ 
+ |_____/|______\\_____|\____/|____/|_____|  |_|   /_/ \\_\\
+                                                         
+[/bold green][bold cyan]        ⚡ AI-Powered Security Scanner v4.0 ⚡[/bold cyan]
 """
 
 
@@ -142,85 +211,70 @@ Input {
 # ============================================================================
 
 class MainMenuScreen(Screen):
-    """Main menu screen with navigation options."""
+    """Beautiful main menu with keyboard navigation."""
     
     BINDINGS = [
-        Binding("1", "scan_local", "Scan Project"),
-        Binding("2", "scan_url", "Scan URL"),
-        Binding("3", "blackbox", "Black Box Test"),
-        Binding("4", "autofix", "Auto Fix"),
-        Binding("5", "reports", "View Reports"),
-        Binding("6", "settings", "Settings"),
-        Binding("q", "quit", "Quit"),
+        Binding("1", "option_1", "Scan", show=False),
+        Binding("2", "option_2", "URL", show=False),
+        Binding("3", "option_3", "BlackBox", show=False),
+        Binding("4", "option_4", "AutoFix", show=False),
+        Binding("5", "option_5", "Reports", show=False),
+        Binding("q", "quit", "Quit", show=False),
+        Binding("escape", "quit", "Quit"),
     ]
     
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         
-        with Container(id="main-container"):
-            yield Static(
-                "🛡️ AI-Powered Security Scanner v4.0",
-                classes="title"
-            )
-            yield Static(
-                "Professional Security Analysis Suite",
-                classes="subtitle"
-            )
-            yield Rule()
+        with Container(id="app-grid"):
+            yield Static(BANNER, classes="banner", markup=True)
+            yield Static("Professional Security Analysis Suite", classes="banner-sub")
             
-            with Container(classes="menu-box"):
-                yield Static("📋 Main Menu", classes="title")
-                yield Rule()
-                
-                yield Button("🔍 [1] Scan Local Project", id="btn-scan", classes="menu-item")
-                yield Button("🌐 [2] Scan Git Repository", id="btn-url", classes="menu-item")
-                yield Button("🎯 [3] Black Box Testing", id="btn-blackbox", classes="menu-item")
-                yield Button("🔧 [4] Auto Fix Vulnerabilities", id="btn-autofix", classes="menu-item")
-                yield Button("📊 [5] View Reports", id="btn-reports", classes="menu-item")
-                yield Button("⚙️  [6] Settings", id="btn-settings", classes="menu-item")
-                yield Rule()
-                yield Button("🚪 [Q] Quit", id="btn-quit", variant="error", classes="menu-item")
+            with Center(id="menu-container"):
+                with Container(classes="menu-box"):
+                    yield Static("🎯 MAIN MENU", classes="scan-title")
+                    yield Rule(style="dim")
+                    
+                    yield Button("🔍  [1]  Scan Local Project", id="btn-1", classes="menu-button")
+                    yield Button("🌐  [2]  Scan Git Repository", id="btn-2", classes="menu-button")
+                    yield Button("🎯  [3]  Black Box Testing", id="btn-3", classes="menu-button")
+                    yield Button("🔧  [4]  Auto Fix Issues", id="btn-4", classes="menu-button")
+                    yield Button("📊  [5]  View Reports", id="btn-5", classes="menu-button")
+                    
+                    yield Rule(style="dim")
+                    yield Button("🚪  [Q]  Exit", id="btn-quit", classes="menu-button quit-button")
             
-            with Horizontal(classes="status-bar"):
-                yield Static("💡 Use number keys for quick navigation | Press Q to quit")
+            yield Static("💡 Press number keys [1-5] or click • [Q] or [ESC] to quit", classes="tips")
         
         yield Footer()
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        button_id = event.button.id
-        
-        if button_id == "btn-scan":
-            self.app.push_screen(ScanScreen())
-        elif button_id == "btn-url":
-            self.app.push_screen(URLScanScreen())
-        elif button_id == "btn-blackbox":
-            self.app.push_screen(BlackBoxScreen())
-        elif button_id == "btn-autofix":
-            self.app.push_screen(AutoFixScreen())
-        elif button_id == "btn-reports":
-            self.app.push_screen(ReportsScreen())
-        elif button_id == "btn-settings":
-            self.app.push_screen(SettingsScreen())
-        elif button_id == "btn-quit":
-            self.app.exit()
+        actions = {
+            "btn-1": lambda: self.app.push_screen(ScanScreen()),
+            "btn-2": lambda: self.app.push_screen(URLScreen()),
+            "btn-3": lambda: self.app.push_screen(BlackBoxScreen()),
+            "btn-4": lambda: self.app.push_screen(AutoFixScreen()),
+            "btn-5": lambda: self.app.push_screen(ReportsScreen()),
+            "btn-quit": lambda: self.app.exit(),
+        }
+        action = actions.get(event.button.id)
+        if action:
+            action()
     
-    def action_scan_local(self) -> None:
+    def action_option_1(self) -> None:
         self.app.push_screen(ScanScreen())
     
-    def action_scan_url(self) -> None:
-        self.app.push_screen(URLScanScreen())
+    def action_option_2(self) -> None:
+        self.app.push_screen(URLScreen())
     
-    def action_blackbox(self) -> None:
+    def action_option_3(self) -> None:
         self.app.push_screen(BlackBoxScreen())
     
-    def action_autofix(self) -> None:
+    def action_option_4(self) -> None:
         self.app.push_screen(AutoFixScreen())
     
-    def action_reports(self) -> None:
+    def action_option_5(self) -> None:
         self.app.push_screen(ReportsScreen())
-    
-    def action_settings(self) -> None:
-        self.app.push_screen(SettingsScreen())
     
     def action_quit(self) -> None:
         self.app.exit()
@@ -231,122 +285,170 @@ class MainMenuScreen(Screen):
 # ============================================================================
 
 class ScanScreen(Screen):
-    """Local project scanning screen."""
+    """Professional scan interface."""
     
     BINDINGS = [
         Binding("escape", "go_back", "Back"),
-        Binding("enter", "start_scan", "Start Scan"),
+        Binding("ctrl+s", "start_scan", "Start"),
     ]
     
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         
-        with Container(id="main-container"):
-            yield Static("🔍 Scan Local Project", classes="title")
-            yield Rule()
+        with Vertical(classes="scan-container"):
+            yield Static("🔍 SCAN LOCAL PROJECT", classes="scan-title")
+            yield Rule(style="green")
             
-            with Container(classes="scan-panel"):
-                yield Label("📁 Enter project path:")
+            with Container(classes="input-group"):
+                yield Label("📁 Project Path:", classes="input-label")
                 yield Input(
-                    placeholder="Enter path or press Tab to browse...",
-                    id="path-input"
-                )
-                
-                with Horizontal():
-                    yield Button("📂 Browse", id="btn-browse")
-                    yield Button("🔍 Start Scan", id="btn-start", variant="success")
-                    yield Button("⬅️ Back", id="btn-back", variant="default")
-                
-                yield Rule()
-                yield Label("⚙️ Scan Options:")
-                
-                with Horizontal():
-                    yield Switch(value=True, id="ai-switch")
-                    yield Label("Enable AI Verification")
-                
-                with Horizontal():
-                    yield Switch(value=True, id="vuln-switch")
-                    yield Label("Enable Vulnerability Scan")
-                
-                yield Label("🤖 AI Provider:")
-                yield Select(
-                    [(name, name) for name in ["gemini", "openai", "claude"]],
-                    value="gemini",
-                    id="ai-provider"
+                    placeholder="Enter path (e.g., . or /home/user/project)",
+                    id="path-input",
+                    value="."
                 )
             
-            with Container(classes="result-panel"):
-                yield Static("📋 Scan Results", classes="title")
-                yield RichLog(id="scan-log", highlight=True, markup=True)
+            with Horizontal(classes="button-row"):
+                yield Button("🔍 Start Scan", id="btn-scan", classes="action-btn primary-btn")
+                yield Button("📂 Use Current Dir", id="btn-cwd", classes="action-btn secondary-btn")
+                yield Button("⬅️ Back", id="btn-back", classes="action-btn secondary-btn")
+            
+            with Container(classes="log-container"):
+                yield Static("📋 OUTPUT LOG", classes="log-title")
+                yield Rule(style="dim")
+                yield RichLog(id="log", highlight=True, markup=True, wrap=True)
         
-        yield Footer()
+        yield Static("💡 [Ctrl+S] to start scan • [ESC] to go back", classes="footer-tips")
+    
+    def on_mount(self) -> None:
+        log = self.query_one("#log", RichLog)
+        log.write("[dim]Ready to scan. Enter a path and click 'Start Scan'.[/dim]")
+        log.write("")
+        log.write("[cyan]Tips:[/cyan]")
+        log.write("  • Use [bold].[/bold] for current directory")
+        log.write("  • Use absolute paths like [bold]/home/user/project[/bold]")
+        log.write("  • Press [bold]Ctrl+S[/bold] to quickly start scanning")
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-back":
             self.app.pop_screen()
-        elif event.button.id == "btn-start":
+        elif event.button.id == "btn-cwd":
+            self.query_one("#path-input", Input).value = str(Path.cwd())
+        elif event.button.id == "btn-scan":
             self.run_scan()
-        elif event.button.id == "btn-browse":
-            # Get current directory as default
-            path_input = self.query_one("#path-input", Input)
-            path_input.value = str(Path.cwd())
     
     def run_scan(self) -> None:
-        path_input = self.query_one("#path-input", Input)
-        log = self.query_one("#scan-log", RichLog)
+        path = self.query_one("#path-input", Input).value or "."
+        log = self.query_one("#log", RichLog)
         
-        path = path_input.value or "."
+        log.clear()
+        log.write(f"[bold green]🚀 STARTING SECURITY SCAN[/bold green]")
+        log.write(f"[blue]📁 Target:[/blue] {path}")
+        log.write("")
+        log.write("[yellow]⏳ Scanning for secrets and vulnerabilities...[/yellow]")
+        log.write("")
         
-        log.write("[bold green]🚀 Starting security scan...[/]")
-        log.write(f"[blue]📁 Path:[/] {path}")
-        
-        # Get options
-        ai_enabled = self.query_one("#ai-switch", Switch).value
-        vuln_enabled = self.query_one("#vuln-switch", Switch).value
-        ai_provider = self.query_one("#ai-provider", Select).value
-        
-        log.write(f"[blue]🤖 AI:[/] {'Enabled' if ai_enabled else 'Disabled'}")
-        log.write(f"[blue]🐛 Vulnerabilities:[/] {'Enabled' if vuln_enabled else 'Disabled'}")
-        
-        # Import and run scanner
-        try:
-            from scanner import run_comprehensive_scan
-            log.write("[yellow]⏳ Scanning in progress...[/]")
-            
-            # Run scan
-            asyncio.create_task(self._async_scan(path, ai_enabled, ai_provider, vuln_enabled, log))
-            
-        except ImportError as e:
-            log.write(f"[red]❌ Error: {e}[/]")
+        # Run scan using CLI
+        asyncio.create_task(self._run_scan_async(path, log))
     
-    async def _async_scan(self, path, ai_enabled, ai_provider, vuln_enabled, log):
-        """Run scan asynchronously."""
+    async def _run_scan_async(self, path: str, log: RichLog) -> None:
         try:
-            from scanner import run_comprehensive_scan
+            # Try to import and run scanner
+            from scanner import scan_for_secrets, load_rules
+            from vulnerability_scanner import VulnerabilityScanner
             
-            results = run_comprehensive_scan(
-                path=path,
-                enable_ai=ai_enabled,
-                ai_provider=ai_provider,
-                enable_vulnerabilities=vuln_enabled,
-                quiet=True
-            )
+            log.write("[cyan]🔍 Loading rules...[/cyan]")
             
-            secrets, vulns, stats = results
+            # Scan for secrets
+            rules = load_rules()
+            secrets = []
+            
+            target_path = Path(path).resolve()
+            if target_path.is_dir():
+                files = list(target_path.rglob("*"))
+                files = [f for f in files if f.is_file() and f.suffix in ['.py', '.js', '.ts', '.java', '.php', '.rb', '.go', '.yaml', '.yml', '.json', '.env', '.config']]
+                
+                log.write(f"[cyan]📂 Found {len(files)} files to scan[/cyan]")
+                
+                for i, file in enumerate(files[:50], 1):  # Limit to 50 files
+                    try:
+                        content = file.read_text(errors='ignore')
+                        file_secrets = scan_for_secrets(str(file), content, rules)
+                        secrets.extend(file_secrets)
+                    except:
+                        pass
+                    
+                    if i % 10 == 0:
+                        log.write(f"[dim]  Scanned {i}/{min(len(files), 50)} files...[/dim]")
+            
+            # Scan for vulnerabilities
+            log.write("[cyan]🐛 Scanning for vulnerabilities...[/cyan]")
+            scanner = VulnerabilityScanner()
+            vulns = []
+            
+            if target_path.is_dir():
+                for file in list(target_path.rglob("*.py"))[:30]:
+                    try:
+                        file_vulns = scanner.scan_file(str(file))
+                        vulns.extend(file_vulns)
+                    except:
+                        pass
+            
+            # Show results
+            log.write("")
+            log.write("[bold green]" + "=" * 50 + "[/bold green]")
+            log.write("[bold green]✅ SCAN COMPLETE![/bold green]")
+            log.write("[bold green]" + "=" * 50 + "[/bold green]")
+            log.write("")
+            
+            if secrets:
+                log.write(f"[bold red]🔑 Secrets Found: {len(secrets)}[/bold red]")
+                for s in secrets[:5]:
+                    log.write(f"  [red]• {s.get('type', 'Secret')} in {s.get('file', 'unknown')}:{s.get('line', 0)}[/red]")
+                if len(secrets) > 5:
+                    log.write(f"  [dim]... and {len(secrets) - 5} more[/dim]")
+            else:
+                log.write("[green]🔑 No secrets found[/green]")
             
             log.write("")
-            log.write("[bold green]✅ Scan Complete![/]")
-            log.write(f"[red]🔑 Secrets Found:[/] {len(secrets)}")
-            log.write(f"[yellow]🐛 Vulnerabilities:[/] {len(vulns)}")
             
-            if stats:
-                log.write(f"[blue]📊 Critical:[/] {stats.get('critical', 0)}")
-                log.write(f"[blue]📊 High:[/] {stats.get('high', 0)}")
-                log.write(f"[blue]📊 Medium:[/] {stats.get('medium', 0)}")
-                log.write(f"[blue]📊 Low:[/] {stats.get('low', 0)}")
+            if vulns:
+                log.write(f"[bold yellow]🐛 Vulnerabilities Found: {len(vulns)}[/bold yellow]")
+                critical = sum(1 for v in vulns if v.severity == 'critical')
+                high = sum(1 for v in vulns if v.severity == 'high')
+                medium = sum(1 for v in vulns if v.severity == 'medium')
+                low = sum(1 for v in vulns if v.severity == 'low')
+                
+                if critical: log.write(f"  [bold red]🔴 Critical: {critical}[/bold red]")
+                if high: log.write(f"  [red]🟠 High: {high}[/red]")
+                if medium: log.write(f"  [yellow]🟡 Medium: {medium}[/yellow]")
+                if low: log.write(f"  [green]🟢 Low: {low}[/green]")
+            else:
+                log.write("[green]🐛 No vulnerabilities found[/green]")
             
+            log.write("")
+            log.write("[dim]Press ESC to go back to menu[/dim]")
+            
+        except ImportError as e:
+            log.write(f"[red]❌ Import Error: {e}[/red]")
+            log.write("[yellow]Running simplified scan...[/yellow]")
+            log.write("")
+            
+            # Fallback: simple file count
+            target = Path(path).resolve()
+            if target.exists():
+                if target.is_dir():
+                    files = list(target.rglob("*"))
+                    py_files = [f for f in files if f.suffix == '.py']
+                    log.write(f"[cyan]📂 Directory: {target}[/cyan]")
+                    log.write(f"[cyan]📄 Total files: {len(files)}[/cyan]")
+                    log.write(f"[cyan]🐍 Python files: {len(py_files)}[/cyan]")
+                else:
+                    log.write(f"[cyan]📄 File: {target}[/cyan]")
+            else:
+                log.write(f"[red]❌ Path not found: {target}[/red]")
+        
         except Exception as e:
-            log.write(f"[red]❌ Error during scan: {e}[/]")
+            log.write(f"[red]❌ Error: {e}[/red]")
     
     def action_go_back(self) -> None:
         self.app.pop_screen()
@@ -356,48 +458,52 @@ class ScanScreen(Screen):
 
 
 # ============================================================================
-# URL SCAN SCREEN
+# URL SCREEN
 # ============================================================================
 
-class URLScanScreen(Screen):
-    """Git repository URL scanning screen."""
+class URLScreen(Screen):
+    """Git repository scanning."""
     
-    BINDINGS = [
-        Binding("escape", "go_back", "Back"),
-    ]
+    BINDINGS = [Binding("escape", "go_back", "Back")]
     
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         
-        with Container(id="main-container"):
-            yield Static("🌐 Scan Git Repository", classes="title")
-            yield Rule()
+        with Vertical(classes="scan-container"):
+            yield Static("🌐 SCAN GIT REPOSITORY", classes="scan-title")
+            yield Rule(style="cyan")
             
-            with Container(classes="scan-panel"):
-                yield Label("📎 Enter Git repository URL:")
+            with Container(classes="input-group"):
+                yield Label("📎 Repository URL:", classes="input-label")
                 yield Input(
                     placeholder="https://github.com/username/repo",
                     id="url-input"
                 )
-                
-                with Horizontal():
-                    yield Button("🔍 Scan Repository", id="btn-scan", variant="success")
-                    yield Button("⬅️ Back", id="btn-back")
             
-            with Container(classes="result-panel"):
-                yield RichLog(id="scan-log", highlight=True, markup=True)
+            with Horizontal(classes="button-row"):
+                yield Button("🔍 Clone & Scan", id="btn-scan", classes="action-btn primary-btn")
+                yield Button("⬅️ Back", id="btn-back", classes="action-btn secondary-btn")
+            
+            with Container(classes="log-container"):
+                yield Static("📋 OUTPUT", classes="log-title")
+                yield Rule(style="dim")
+                yield RichLog(id="log", highlight=True, markup=True)
         
-        yield Footer()
+        yield Static("💡 Enter a GitHub/GitLab URL to scan • [ESC] to go back", classes="footer-tips")
+    
+    def on_mount(self) -> None:
+        log = self.query_one("#log", RichLog)
+        log.write("[dim]Enter a Git repository URL and click 'Clone & Scan'[/dim]")
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-back":
             self.app.pop_screen()
         elif event.button.id == "btn-scan":
-            log = self.query_one("#scan-log", RichLog)
             url = self.query_one("#url-input", Input).value
-            
-            log.write(f"[green]🌐 Scanning: {url}[/]")
-            log.write("[yellow]⏳ Cloning and scanning...[/]")
+            log = self.query_one("#log", RichLog)
+            log.clear()
+            log.write(f"[green]🌐 Scanning: {url}[/green]")
+            log.write("[yellow]⏳ Feature coming soon...[/yellow]")
     
     def action_go_back(self) -> None:
         self.app.pop_screen()
@@ -408,58 +514,48 @@ class URLScanScreen(Screen):
 # ============================================================================
 
 class BlackBoxScreen(Screen):
-    """Black box testing screen."""
+    """Web application testing."""
     
-    BINDINGS = [
-        Binding("escape", "go_back", "Back"),
-    ]
+    BINDINGS = [Binding("escape", "go_back", "Back")]
     
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         
-        with Container(id="main-container"):
-            yield Static("🎯 Black Box Security Testing", classes="title")
-            yield Rule()
+        with Vertical(classes="scan-container"):
+            yield Static("🎯 BLACK BOX TESTING", classes="scan-title")
+            yield Rule(style="red")
             
-            with Container(classes="scan-panel"):
-                yield Label("🌐 Enter target URL:")
+            with Container(classes="input-group"):
+                yield Label("🌐 Target URL:", classes="input-label")
                 yield Input(
                     placeholder="https://example.com",
                     id="target-input"
                 )
-                
-                yield Label("🧪 Tests to run:")
-                with Horizontal():
-                    yield Switch(value=True, id="headers-switch")
-                    yield Label("Security Headers")
-                with Horizontal():
-                    yield Switch(value=True, id="ssl-switch")
-                    yield Label("SSL/TLS Check")
-                with Horizontal():
-                    yield Switch(value=True, id="sql-switch")
-                    yield Label("SQL Injection")
-                with Horizontal():
-                    yield Switch(value=True, id="xss-switch")
-                    yield Label("XSS Detection")
-                
-                with Horizontal():
-                    yield Button("🎯 Start Test", id="btn-test", variant="success")
-                    yield Button("⬅️ Back", id="btn-back")
             
-            with Container(classes="result-panel"):
-                yield RichLog(id="test-log", highlight=True, markup=True)
+            with Horizontal(classes="button-row"):
+                yield Button("🎯 Start Test", id="btn-test", classes="action-btn primary-btn")
+                yield Button("⬅️ Back", id="btn-back", classes="action-btn secondary-btn")
+            
+            with Container(classes="log-container"):
+                yield Static("📋 TEST RESULTS", classes="log-title")
+                yield Rule(style="dim")
+                yield RichLog(id="log", highlight=True, markup=True)
         
-        yield Footer()
+        yield Static("💡 Enter a website URL to test security • [ESC] to go back", classes="footer-tips")
+    
+    def on_mount(self) -> None:
+        log = self.query_one("#log", RichLog)
+        log.write("[dim]Enter a target URL and click 'Start Test'[/dim]")
+        log.write("")
+        log.write("[cyan]Tests include:[/cyan]")
+        log.write("  • Security Headers")
+        log.write("  • SSL/TLS Configuration")
+        log.write("  • SQL Injection")
+        log.write("  • XSS Detection")
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-back":
             self.app.pop_screen()
-        elif event.button.id == "btn-test":
-            log = self.query_one("#test-log", RichLog)
-            target = self.query_one("#target-input", Input).value
-            
-            log.write(f"[green]🎯 Testing: {target}[/]")
-            log.write("[yellow]⏳ Running security tests...[/]")
     
     def action_go_back(self) -> None:
         self.app.pop_screen()
@@ -470,43 +566,41 @@ class BlackBoxScreen(Screen):
 # ============================================================================
 
 class AutoFixScreen(Screen):
-    """Auto fix vulnerabilities screen."""
+    """Auto fix vulnerabilities."""
     
-    BINDINGS = [
-        Binding("escape", "go_back", "Back"),
-    ]
+    BINDINGS = [Binding("escape", "go_back", "Back")]
     
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         
-        with Container(id="main-container"):
-            yield Static("🔧 Auto Fix Vulnerabilities", classes="title")
-            yield Rule()
+        with Vertical(classes="scan-container"):
+            yield Static("🔧 AUTO FIX VULNERABILITIES", classes="scan-title")
+            yield Rule(style="yellow")
             
-            with Container(classes="scan-panel"):
-                yield Label("📁 Project path:")
-                yield Input(placeholder="Enter project path...", id="path-input")
-                
-                yield Label("🔧 Fix types:")
-                with Horizontal():
-                    yield Switch(value=True, id="crypto-switch")
-                    yield Label("Weak Cryptography (MD5 → SHA256)")
-                with Horizontal():
-                    yield Switch(value=True, id="secrets-switch")
-                    yield Label("Hardcoded Secrets → Environment Variables")
-                with Horizontal():
-                    yield Switch(value=True, id="sql-switch")
-                    yield Label("SQL Injection")
-                
-                with Horizontal():
-                    yield Button("👁️ Preview Fixes", id="btn-preview", variant="primary")
-                    yield Button("🔧 Apply Fixes", id="btn-apply", variant="success")
-                    yield Button("⬅️ Back", id="btn-back")
+            with Container(classes="input-group"):
+                yield Label("📁 Project Path:", classes="input-label")
+                yield Input(placeholder="Enter path...", id="path-input", value=".")
             
-            with Container(classes="result-panel"):
-                yield RichLog(id="fix-log", highlight=True, markup=True)
+            with Horizontal(classes="button-row"):
+                yield Button("👁️ Preview Fixes", id="btn-preview", classes="action-btn secondary-btn")
+                yield Button("🔧 Apply Fixes", id="btn-apply", classes="action-btn primary-btn")
+                yield Button("⬅️ Back", id="btn-back", classes="action-btn secondary-btn")
+            
+            with Container(classes="log-container"):
+                yield Static("📋 FIX LOG", classes="log-title")
+                yield Rule(style="dim")
+                yield RichLog(id="log", highlight=True, markup=True)
         
-        yield Footer()
+        yield Static("💡 Preview fixes before applying • [ESC] to go back", classes="footer-tips")
+    
+    def on_mount(self) -> None:
+        log = self.query_one("#log", RichLog)
+        log.write("[dim]Enter path and click 'Preview Fixes' to see available fixes[/dim]")
+        log.write("")
+        log.write("[cyan]Auto-fix supports:[/cyan]")
+        log.write("  • [green]✓[/green] Weak Crypto (MD5 → SHA256)")
+        log.write("  • [green]✓[/green] Hardcoded Secrets → Environment Variables")
+        log.write("  • [green]✓[/green] Dangerous Functions (eval, exec)")
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-back":
@@ -521,101 +615,57 @@ class AutoFixScreen(Screen):
 # ============================================================================
 
 class ReportsScreen(Screen):
-    """View reports screen."""
+    """View scan reports."""
     
-    BINDINGS = [
-        Binding("escape", "go_back", "Back"),
-    ]
+    BINDINGS = [Binding("escape", "go_back", "Back")]
     
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         
-        with Container(id="main-container"):
-            yield Static("📊 Scan Reports", classes="title")
-            yield Rule()
+        with Vertical(classes="scan-container"):
+            yield Static("📊 SCAN REPORTS", classes="scan-title")
+            yield Rule(style="blue")
             
-            with Container(classes="scan-panel"):
-                yield Label("📁 Reports Directory: ./output/")
-                yield DataTable(id="reports-table")
-                
-                with Horizontal():
-                    yield Button("🔄 Refresh", id="btn-refresh")
-                    yield Button("📂 Open Folder", id="btn-open")
-                    yield Button("⬅️ Back", id="btn-back")
+            with Container(classes="log-container"):
+                yield Static("📁 Reports Directory: ./output/", classes="log-title")
+                yield Rule(style="dim")
+                yield RichLog(id="log", highlight=True, markup=True)
+            
+            with Horizontal(classes="button-row"):
+                yield Button("🔄 Refresh", id="btn-refresh", classes="action-btn secondary-btn")
+                yield Button("⬅️ Back", id="btn-back", classes="action-btn secondary-btn")
         
-        yield Footer()
+        yield Static("💡 Reports are saved in the output/ directory • [ESC] to go back", classes="footer-tips")
     
     def on_mount(self) -> None:
-        table = self.query_one("#reports-table", DataTable)
-        table.add_columns("📄 File", "📅 Date", "📊 Type")
+        self.list_reports()
+    
+    def list_reports(self) -> None:
+        log = self.query_one("#log", RichLog)
+        log.clear()
         
-        # Check for reports
         output_dir = Path("output")
         if output_dir.exists():
-            for f in output_dir.glob("*"):
-                if f.suffix in [".html", ".json", ".md", ".pdf"]:
-                    table.add_row(f.name, "2024-01-06", f.suffix[1:].upper())
+            reports = list(output_dir.glob("*"))
+            if reports:
+                log.write("[green]📄 Available Reports:[/green]")
+                log.write("")
+                for r in sorted(reports, key=lambda x: x.stat().st_mtime, reverse=True)[:10]:
+                    size = r.stat().st_size // 1024
+                    log.write(f"  [cyan]•[/cyan] {r.name} ({size} KB)")
+            else:
+                log.write("[yellow]No reports found yet.[/yellow]")
+        else:
+            log.write("[yellow]Output directory not found.[/yellow]")
+        
+        log.write("")
+        log.write("[dim]Run a scan to generate reports.[/dim]")
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-back":
             self.app.pop_screen()
-    
-    def action_go_back(self) -> None:
-        self.app.pop_screen()
-
-
-# ============================================================================
-# SETTINGS SCREEN
-# ============================================================================
-
-class SettingsScreen(Screen):
-    """Settings screen."""
-    
-    BINDINGS = [
-        Binding("escape", "go_back", "Back"),
-    ]
-    
-    def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
-        
-        with Container(id="main-container"):
-            yield Static("⚙️ Settings", classes="title")
-            yield Rule()
-            
-            with Container(classes="scan-panel"):
-                yield Label("🤖 Default AI Provider:")
-                yield Select(
-                    [("Google Gemini", "gemini"), ("OpenAI", "openai"), ("Claude", "claude")],
-                    value="gemini",
-                    id="ai-select"
-                )
-                
-                yield Label("🔑 API Keys:")
-                yield Input(placeholder="GEMINI_API_KEY", password=True, id="gemini-key")
-                yield Input(placeholder="OPENAI_API_KEY", password=True, id="openai-key")
-                yield Input(placeholder="ANTHROPIC_API_KEY", password=True, id="claude-key")
-                
-                yield Rule()
-                yield Label("📊 Report Settings:")
-                with Horizontal():
-                    yield Switch(value=True, id="html-switch")
-                    yield Label("Generate HTML Report")
-                with Horizontal():
-                    yield Switch(value=True, id="json-switch")
-                    yield Label("Generate JSON Report")
-                with Horizontal():
-                    yield Switch(value=False, id="pdf-switch")
-                    yield Label("Generate PDF Report")
-                
-                with Horizontal():
-                    yield Button("💾 Save Settings", id="btn-save", variant="success")
-                    yield Button("⬅️ Back", id="btn-back")
-        
-        yield Footer()
-    
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-back":
-            self.app.pop_screen()
+        elif event.button.id == "btn-refresh":
+            self.list_reports()
     
     def action_go_back(self) -> None:
         self.app.pop_screen()
@@ -626,28 +676,26 @@ class SettingsScreen(Screen):
 # ============================================================================
 
 class SecurityScannerApp(App):
-    """Main TUI Application for Security Scanner."""
+    """Professional Security Scanner TUI."""
     
-    TITLE = "🛡️ Security Scanner"
+    TITLE = "Security Scanner"
     SUB_TITLE = "AI-Powered Security Analysis"
     CSS = CSS
     
     BINDINGS = [
-        Binding("ctrl+q", "quit", "Quit", show=True),
-        Binding("ctrl+d", "toggle_dark", "Toggle Dark Mode"),
+        Binding("ctrl+q", "quit", "Quit"),
+        Binding("ctrl+d", "toggle_dark", "Theme"),
     ]
     
     def on_mount(self) -> None:
-        """Called when app starts."""
         self.push_screen(MainMenuScreen())
     
     def action_toggle_dark(self) -> None:
-        """Toggle dark mode."""
         self.dark = not self.dark
 
 
 def main():
-    """Entry point for the TUI application."""
+    """Entry point."""
     app = SecurityScannerApp()
     app.run()
 
