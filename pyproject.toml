@@ -97,7 +97,8 @@ py-modules = [
     "ui_components",
     "url_scanner",
     "blackbox_tester",
-    "benchmark"
+    "benchmark",
+    "tui_app"
 ]
 
 [tool.setuptools.package-data]
