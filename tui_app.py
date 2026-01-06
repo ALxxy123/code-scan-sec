@@ -684,14 +684,11 @@ class SecurityScannerApp(App):
     
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit"),
-        Binding("ctrl+d", "toggle_dark", "Theme"),
     ]
     
     def on_mount(self) -> None:
         self.push_screen(MainMenuScreen())
-    
-    def action_toggle_dark(self) -> None:
-        self.dark = not self.dark
+
 
 
 def main():
