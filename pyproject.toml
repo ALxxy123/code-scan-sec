@@ -39,6 +39,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "reportlab>=4.0.0",
     "packaging>=23.0",
+    "textual>=0.47.0",
 ]
 
 [project.optional-dependencies]
@@ -77,6 +78,7 @@ Issues = "https://github.com/ALxxy123/code-scan-sec/issues"
 
 [project.scripts]
 security-scan = "main_cli:main"
+sec-scan = "tui_app:main"
 security-scan-legacy = "scanner:app"
 security-scan-server = "api_server:app"
 
