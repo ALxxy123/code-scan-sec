@@ -283,34 +283,57 @@ class DashboardScreen(Screen):
 class ScanScreen(Screen):
     """Professional scanning interface."""
     
-    BINDINGS = [Binding("escape", "back", "Back")]
+    BINDINGS = [
+        Binding("escape", "back", "Back"),
+        Binding("enter", "start", "Start Scan"),
+    ]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield Static("🔍 LOCAL VULNERABILITY SCANNER", classes="title-text")
         
-        with Vertical(classes="scan-layout"):
-            with Vertical(classes="input-container"):
-                yield Label("TARGET DIRECTORY", classes="section-title")
-                yield Input(placeholder="/path/to/project", value=".", id="path-input")
-                
-                with Horizontal():
-                    yield Button("🚀 INITIALIZE SCAN", id="btn-start", classes="primary")
-                    yield Button("⬅ RETURN TO DASHBOARD", id="btn-back")
-
+        with Vertical():
+            # Input Section
+            with Container(classes="input-container"):
+                yield Label("📁 TARGET DIRECTORY", classes="section-title")
+                yield Input(placeholder="Enter path (e.g., C:\\project or .)", value=".", id="path-input")
+            
+            # Buttons - Clear and visible
+            yield Static("")  # Spacer
+            yield Button("🚀  START SCAN  [Enter]", id="btn-start", classes="primary")
+            yield Button("⬅️  BACK TO MENU  [Esc]", id="btn-back")
+            yield Static("")  # Spacer
+            
+            # Console Output
+            yield Label("📋 SCAN OUTPUT", classes="section-title")
             yield RichLog(id="console", highlight=True, markup=True)
 
         yield Footer()
 
     def on_mount(self):
-        self.query_one("#console").write("[dim]System ready. Select target and initialize scan.[/dim]")
+        console = self.query_one("#console", RichLog)
+        console.write("[bold cyan]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/]")
+        console.write("[bold]🛡️ Security Scanner Ready[/]")
+        console.write("[dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/]")
+        console.write("")
+        console.write("[cyan]Instructions:[/]")
+        console.write("  1. Enter the path to scan in the input field above")
+        console.write("  2. Press [bold green]Enter[/] or click [bold green]START SCAN[/]")
+        console.write("  3. Wait for results to appear here")
+        console.write("")
+        console.write("[dim]Tip: Use '.' for current directory[/]")
 
     def on_button_pressed(self, event: Button.Pressed):
-        if event.button.id == "btn-back": self.app.pop_screen()
-        elif event.button.id == "btn-start": self.start_scan()
+        if event.button.id == "btn-back":
+            self.app.pop_screen()
+        elif event.button.id == "btn-start":
+            self.start_scan()
 
     def action_back(self):
         self.app.pop_screen()
+    
+    def action_start(self):
+        self.start_scan()
 
     def start_scan(self):
         path = self.query_one("#path-input").value
