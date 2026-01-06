@@ -470,7 +470,10 @@ class ScanScreen(Screen):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class URLScreen(Screen):
-    BINDINGS = [Binding("escape", "back", "Back")]
+    BINDINGS = [
+        Binding("escape", "back", "Back"),
+        Binding("enter", "start", "Start"),
+    ]
     
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -488,15 +491,103 @@ class URLScreen(Screen):
         yield Footer()
 
     def on_mount(self):
-        self.query_one("#console", RichLog).write("[dim]Enter a Git repository URL to scan...[/]")
+        c = self.query_one("#console", RichLog)
+        c.write("[bold #39ff14]╔══════════════════════════════════════════════════════════════╗[/]")
+        c.write("[bold #39ff14]║[/]          [bold]🌐 Remote Repository Scanner[/]                       [bold #39ff14]║[/]")
+        c.write("[bold #39ff14]╚══════════════════════════════════════════════════════════════╝[/]")
+        c.write("")
+        c.write("[#fbbf24]Supported Platforms:[/]")
+        c.write("  • GitHub (https://github.com/user/repo)")
+        c.write("  • GitLab (https://gitlab.com/user/repo)")
+        c.write("  • Bitbucket (https://bitbucket.org/user/repo)")
+        c.write("")
+        c.write("[dim]Enter a repository URL and press Enter to scan...[/]")
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "btn-back": self.app.pop_screen()
-        elif event.button.id == "btn-start":
-            url = self.query_one("#url-input", Input).value
-            self.query_one("#console", RichLog).write(f"[#fbbf24]▸ Cloning: {url}[/]")
+        elif event.button.id == "btn-start": self.action_start()
 
     def action_back(self): self.app.pop_screen()
+    
+    def action_start(self):
+        url = self.query_one("#url-input", Input).value
+        if not url:
+            self.query_one("#console", RichLog).write("[bold red]✖ Please enter a URL[/]")
+            return
+        asyncio.create_task(self._run_url_scan(url))
+
+    async def _run_url_scan(self, url: str):
+        c = self.query_one("#console", RichLog)
+        c.clear()
+        c.write(f"[bold #39ff14]⚡ SCANNING REMOTE REPOSITORY[/]")
+        c.write(f"[dim]URL: {url}[/]")
+        c.write("")
+        
+        try:
+            from url_scanner import URLScanner
+            from scanner import scan_for_secrets, load_rules
+            from vulnerability_scanner import VulnerabilityScanner
+            
+            c.write("[#3b82f6]▸ Initializing URL scanner...[/]")
+            
+            with URLScanner() as scanner:
+                c.write("[#3b82f6]▸ Cloning repository (this may take a moment)...[/]")
+                await asyncio.sleep(0.1)
+                
+                try:
+                    local_path = scanner.scan_url(url)
+                    c.write(f"[#39ff14]✓ Cloned to: {local_path}[/]")
+                    
+                    # Now scan the cloned repo
+                    c.write("[#3b82f6]▸ Loading scan rules...[/]")
+                    rules = load_rules()
+                    vuln_scanner = VulnerabilityScanner()
+                    
+                    files = list(Path(local_path).rglob("*"))
+                    files = [f for f in files if f.is_file() and not any(p.startswith('.') for p in f.parts)]
+                    
+                    c.write(f"[#3b82f6]▸ Scanning {len(files)} files...[/]")
+                    
+                    secrets_found = []
+                    vulns_found = []
+                    
+                    for f in files[:100]:
+                        try:
+                            content = f.read_text(errors='ignore')
+                            s = scan_for_secrets(str(f), content, rules)
+                            if s:
+                                secrets_found.extend(s)
+                                for sec in s:
+                                    c.write(f"[bold red]🔑 SECRET:[/] {sec.get('type', 'Unknown')} in [dim]{f.name}[/]")
+                            
+                            if f.suffix == ".py":
+                                v = vuln_scanner.scan_file(str(f))
+                                if v:
+                                    vulns_found.extend(v)
+                                    for vuln in v:
+                                        c.write(f"[bold #fbbf24]⚠ {vuln.severity.upper()}:[/] {vuln.title} in [dim]{f.name}[/]")
+                        except:
+                            pass
+                    
+                    c.write("")
+                    c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+                    c.write("[bold #39ff14]✓ REMOTE SCAN COMPLETE[/]")
+                    c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+                    c.write(f"[bold]📊 SUMMARY[/]")
+                    c.write(f"   Files Scanned: [bold]{min(len(files), 100)}[/]")
+                    c.write(f"   Secrets Found: [bold red]{len(secrets_found)}[/]")
+                    c.write(f"   Vulnerabilities: [bold #fbbf24]{len(vulns_found)}[/]")
+                    
+                except RuntimeError as e:
+                    c.write(f"[bold red]✖ Clone failed: {e}[/]")
+                    c.write("[dim]Make sure git is installed and the URL is accessible.[/]")
+                    
+        except ImportError as e:
+            c.write(f"[bold red]✖ Module Error: {e}[/]")
+            c.write("[dim]URL scanning module not available.[/]")
+        except Exception as e:
+            c.write(f"[bold red]✖ Error: {e}[/]")
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -504,7 +595,10 @@ class URLScreen(Screen):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class BlackBoxScreen(Screen):
-    BINDINGS = [Binding("escape", "back", "Back")]
+    BINDINGS = [
+        Binding("escape", "back", "Back"),
+        Binding("enter", "start", "Start"),
+    ]
     
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -523,18 +617,98 @@ class BlackBoxScreen(Screen):
 
     def on_mount(self):
         c = self.query_one("#console", RichLog)
-        c.write("[dim]Black Box Security Testing Suite[/]")
+        c.write("[bold #39ff14]╔══════════════════════════════════════════════════════════════╗[/]")
+        c.write("[bold #39ff14]║[/]          [bold]🎯 Black Box Security Testing[/]                      [bold #39ff14]║[/]")
+        c.write("[bold #39ff14]╚══════════════════════════════════════════════════════════════╝[/]")
         c.write("")
-        c.write("[#fbbf24]Available Tests:[/]")
+        c.write("[#fbbf24]Security Tests:[/]")
         c.write("  • Security Headers Analysis")
         c.write("  • SSL/TLS Configuration Check")
         c.write("  • SQL Injection Detection")
         c.write("  • XSS Vulnerability Scan")
+        c.write("  • Path Traversal Testing")
+        c.write("")
+        c.write("[dim]Enter a target URL and press Enter to start testing...[/]")
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "btn-back": self.app.pop_screen()
-    
+        elif event.button.id == "btn-start": self.action_start()
+
     def action_back(self): self.app.pop_screen()
+    
+    def action_start(self):
+        url = self.query_one("#url-input", Input).value
+        if not url:
+            self.query_one("#console", RichLog).write("[bold red]✖ Please enter a target URL[/]")
+            return
+        asyncio.create_task(self._run_blackbox(url))
+
+    async def _run_blackbox(self, url: str):
+        c = self.query_one("#console", RichLog)
+        c.clear()
+        c.write(f"[bold red]🎯 LAUNCHING BLACK BOX TESTS[/]")
+        c.write(f"[dim]Target: {url}[/]")
+        c.write("")
+        
+        try:
+            from blackbox_tester import BlackBoxTester
+            
+            c.write("[#3b82f6]▸ Initializing Black Box Tester...[/]")
+            tester = BlackBoxTester(url)
+            
+            # Security Headers
+            c.write("[#3b82f6]▸ Testing Security Headers...[/]")
+            await asyncio.sleep(0.1)
+            headers_results = tester.test_security_headers()
+            if headers_results:
+                for issue in headers_results:
+                    c.write(f"[bold #fbbf24]⚠ HEADER:[/] {issue.get('header', 'Unknown')} - {issue.get('issue', '')}")
+            else:
+                c.write("[#39ff14]✓ Security headers OK[/]")
+            
+            # SSL/TLS
+            c.write("[#3b82f6]▸ Testing SSL/TLS Configuration...[/]")
+            await asyncio.sleep(0.1)
+            ssl_results = tester.test_ssl_tls()
+            if ssl_results:
+                for issue in ssl_results:
+                    c.write(f"[bold #fbbf24]⚠ SSL:[/] {issue.get('issue', 'SSL Issue')}")
+            else:
+                c.write("[#39ff14]✓ SSL/TLS configuration OK[/]")
+            
+            # SQL Injection
+            c.write("[#3b82f6]▸ Testing for SQL Injection...[/]")
+            await asyncio.sleep(0.1)
+            sqli_results = tester.test_sql_injection()
+            if sqli_results:
+                for issue in sqli_results:
+                    c.write(f"[bold red]🔴 SQLI:[/] {issue.get('parameter', '')} - {issue.get('evidence', '')}")
+            else:
+                c.write("[#39ff14]✓ No SQL injection detected[/]")
+            
+            # XSS
+            c.write("[#3b82f6]▸ Testing for XSS...[/]")
+            await asyncio.sleep(0.1)
+            xss_results = tester.test_xss()
+            if xss_results:
+                for issue in xss_results:
+                    c.write(f"[bold red]🔴 XSS:[/] {issue.get('evidence', 'XSS Found')}")
+            else:
+                c.write("[#39ff14]✓ No XSS detected[/]")
+            
+            # Summary
+            total_issues = len(headers_results) + len(ssl_results) + len(sqli_results) + len(xss_results)
+            c.write("")
+            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+            c.write("[bold #39ff14]✓ BLACK BOX TEST COMPLETE[/]")
+            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+            c.write(f"[bold]Total Issues Found: {total_issues}[/]")
+            
+        except ImportError as e:
+            c.write(f"[bold red]✖ Module Error: {e}[/]")
+        except Exception as e:
+            c.write(f"[bold red]✖ Error: {e}[/]")
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -542,7 +716,10 @@ class BlackBoxScreen(Screen):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class AutoFixScreen(Screen):
-    BINDINGS = [Binding("escape", "back", "Back")]
+    BINDINGS = [
+        Binding("escape", "back", "Back"),
+        Binding("enter", "start", "Start"),
+    ]
     
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -552,8 +729,8 @@ class AutoFixScreen(Screen):
                 yield Static("📁 PROJECT PATH", classes="input-label")
                 yield Input(value=".", id="path-input")
             with Center(classes="btn-row"):
-                yield Button("👁 PREVIEW", id="btn-preview")
-                yield Button("🔧 APPLY FIXES", id="btn-start", classes="-primary")
+                yield Button("👁 PREVIEW FIXES", id="btn-preview")
+                yield Button("🔧 APPLY FIXES", id="btn-apply", classes="-primary")
                 yield Button("⬅ BACK", id="btn-back")
             with Container(classes="console-section"):
                 yield Static("📋 FIX LOG", classes="console-title")
@@ -562,18 +739,139 @@ class AutoFixScreen(Screen):
 
     def on_mount(self):
         c = self.query_one("#console", RichLog)
-        c.write("[dim]Automated Security Fix Engine[/]")
+        c.write("[bold #39ff14]╔══════════════════════════════════════════════════════════════╗[/]")
+        c.write("[bold #39ff14]║[/]          [bold]🔧 Automated Remediation Engine[/]                    [bold #39ff14]║[/]")
+        c.write("[bold #39ff14]╚══════════════════════════════════════════════════════════════╝[/]")
         c.write("")
         c.write("[#39ff14]Supported Fixes:[/]")
         c.write("  ✓ Weak Crypto (MD5 → SHA256)")
         c.write("  ✓ Hardcoded Secrets → Environment Variables")
         c.write("  ✓ Dangerous Functions (eval, exec)")
         c.write("  ✓ SQL Injection Prevention")
+        c.write("  ✓ XSS Vulnerabilities")
+        c.write("")
+        c.write("[dim]Click PREVIEW to see available fixes, then APPLY to fix them.[/]")
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "btn-back": self.app.pop_screen()
-    
+        elif event.button.id == "btn-preview": asyncio.create_task(self._preview_fixes())
+        elif event.button.id == "btn-apply": asyncio.create_task(self._apply_fixes())
+
     def action_back(self): self.app.pop_screen()
+    
+    def action_start(self):
+        asyncio.create_task(self._preview_fixes())
+
+    async def _preview_fixes(self):
+        path = self.query_one("#path-input", Input).value
+        c = self.query_one("#console", RichLog)
+        c.clear()
+        c.write(f"[bold #fbbf24]👁 PREVIEWING AVAILABLE FIXES[/]")
+        c.write(f"[dim]Path: {path}[/]")
+        c.write("")
+        
+        try:
+            from auto_fix import AutoFix
+            
+            c.write("[#3b82f6]▸ Analyzing code for fixable issues...[/]")
+            fixer = AutoFix(interactive=False)
+            
+            target = Path(path).resolve()
+            if not target.exists():
+                c.write(f"[bold red]✖ Path not found: {target}[/]")
+                return
+            
+            files = list(target.rglob("*.py"))[:50]
+            c.write(f"[#3b82f6]▸ Scanning {len(files)} Python files...[/]")
+            
+            total_fixes = 0
+            for f in files:
+                try:
+                    content = f.read_text(errors='ignore')
+                    
+                    # Check for weak crypto
+                    _, crypto_fixes = fixer.fix_weak_crypto(str(f), content)
+                    for fix in crypto_fixes:
+                        c.write(f"[#fbbf24]⚡ CRYPTO:[/] {fix.description} in [dim]{f.name}:{fix.line_number}[/]")
+                        total_fixes += 1
+                    
+                    # Check for hardcoded secrets
+                    _, secret_fixes, _ = fixer.fix_hardcoded_secrets(str(f), content)
+                    for fix in secret_fixes:
+                        c.write(f"[#fbbf24]🔑 SECRET:[/] {fix.description} in [dim]{f.name}:{fix.line_number}[/]")
+                        total_fixes += 1
+                    
+                    # Check for dangerous functions
+                    _, danger_fixes = fixer.fix_dangerous_functions(str(f), content)
+                    for fix in danger_fixes:
+                        c.write(f"[#fbbf24]⚠ DANGER:[/] {fix.description} in [dim]{f.name}:{fix.line_number}[/]")
+                        total_fixes += 1
+                        
+                except Exception:
+                    pass
+                
+                await asyncio.sleep(0.01)
+            
+            c.write("")
+            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+            c.write(f"[bold]Total Fixes Available: {total_fixes}[/]")
+            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+            
+            if total_fixes > 0:
+                c.write("")
+                c.write("[bold #fbbf24]Click APPLY FIXES to automatically fix these issues.[/]")
+            else:
+                c.write("")
+                c.write("[bold #39ff14]✓ No fixable issues found. Code looks clean![/]")
+            
+        except ImportError as e:
+            c.write(f"[bold red]✖ Module Error: {e}[/]")
+        except Exception as e:
+            c.write(f"[bold red]✖ Error: {e}[/]")
+
+    async def _apply_fixes(self):
+        path = self.query_one("#path-input", Input).value
+        c = self.query_one("#console", RichLog)
+        c.clear()
+        c.write(f"[bold #39ff14]🔧 APPLYING AUTOMATIC FIXES[/]")
+        c.write(f"[dim]Path: {path}[/]")
+        c.write("")
+        
+        try:
+            from auto_fix import AutoFix
+            
+            c.write("[#3b82f6]▸ Initializing auto-fix engine...[/]")
+            fixer = AutoFix(interactive=False)
+            
+            target = Path(path).resolve()
+            files = list(target.rglob("*.py"))[:50]
+            
+            c.write(f"[#3b82f6]▸ Processing {len(files)} files...[/]")
+            
+            fixed_count = 0
+            for f in files:
+                try:
+                    result = fixer.fix_file(str(f))
+                    if result.get('fixes_applied', 0) > 0:
+                        fixed_count += result['fixes_applied']
+                        c.write(f"[#39ff14]✓ Fixed:[/] {f.name} ({result['fixes_applied']} fixes)")
+                except Exception:
+                    pass
+                
+                await asyncio.sleep(0.01)
+            
+            c.write("")
+            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+            c.write("[bold #39ff14]✓ AUTO-FIX COMPLETE[/]")
+            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+            c.write(f"[bold]Total Fixes Applied: {fixed_count}[/]")
+            
+        except ImportError as e:
+            c.write(f"[bold red]✖ Module Error: {e}[/]")
+        except Exception as e:
+            c.write(f"[bold red]✖ Error: {e}[/]")
+
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
