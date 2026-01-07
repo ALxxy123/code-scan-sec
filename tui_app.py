@@ -201,13 +201,29 @@ Input:focus {
 }
 
 Select {
-    background: #0a0e14;
-    border: solid #252b37;
+    background: #141922;
+    border: solid #39ff14;
     color: #e4e4e7;
+    width: 100%;
+    height: 3;
 }
 
 Select:focus {
+    border: double #39ff14;
+}
+
+Select > SelectCurrent {
+    background: #141922;
+    color: #39ff14;
+}
+
+Select > SelectOverlay {
+    background: #0a0e14;
     border: solid #39ff14;
+}
+
+SelectOverlay:focus > SelectCurrent {
+    background: #252b37;
 }
 
 .btn-row {
@@ -702,107 +718,198 @@ class ScanScreen(Screen):
         asyncio.create_task(self._run_scan(path, ai))
 
     async def _run_scan(self, path: str, ai_provider: str):
+        """Run comprehensive security scan."""
         c = self.query_one("#console", RichLog)
         progress = self.query_one("#progress", ProgressBar)
         c.clear()
         
-        c.write(f"[bold #39ff14]⚡ INITIALIZING SCAN[/]")
-        c.write(f"[dim]Target: {path}[/]")
-        c.write(f"[dim]AI: {ai_provider}[/]")
+        c.write("[bold #39ff14]╔══════════════════════════════════════════════════════════════╗[/]")
+        c.write("[bold #39ff14]║[/]          [bold]🛡️ SECURITY SCAN STARTING[/]                           [bold #39ff14]║[/]")
+        c.write("[bold #39ff14]╚══════════════════════════════════════════════════════════════╝[/]")
+        c.write("")
+        c.write(f"[dim]Target:[/] {path}")
+        c.write(f"[dim]AI Provider:[/] {ai_provider}")
         c.write("")
         
         progress.update(total=100, progress=5)
         
         try:
-            from scanner import scan_for_secrets, load_rules
+            # Import scanner modules
+            from scanner import scan_single_file, load_rules, calculate_entropy
             from vulnerability_scanner import VulnerabilityScanner
             
             start_time = time.time()
             
-            c.write("[#3b82f6]▸ Loading rule definitions...[/]")
+            # Step 1: Load rules
+            c.write("[#3b82f6]▸ Loading detection rules...[/]")
             progress.update(progress=10)
+            await asyncio.sleep(0.05)
+            
             rules = load_rules()
-            scanner = VulnerabilityScanner()
+            c.write(f"[#39ff14]  ✓ Loaded {len(rules)} detection patterns[/]")
+            
+            # Step 2: Collect files
+            c.write("[#3b82f6]▸ Collecting files to scan...[/]")
+            progress.update(progress=15)
             
             target = Path(path).resolve()
             if not target.exists():
-                c.write(f"[bold red]✖ Error: Path not found[/]")
+                c.write(f"[bold red]✖ ERROR: Path not found: {target}[/]")
+                progress.update(progress=100)
                 return
             
-            files = list(target.rglob("*")) if target.is_dir() else [target]
-            files = [f for f in files if f.is_file() and not any(p.startswith('.') for p in f.parts)]
+            # Collect all files, excluding hidden and common non-code files
+            IGNORE_DIRS = {'.git', '__pycache__', 'node_modules', 'venv', '.venv', 'dist', 'build', '.idea', '.vscode'}
+            IGNORE_EXTS = {'.pyc', '.pyo', '.so', '.dll', '.exe', '.bin', '.jpg', '.png', '.gif', '.ico', '.woff', '.ttf'}
             
+            all_files = []
+            if target.is_file():
+                all_files = [target]
+            else:
+                for f in target.rglob("*"):
+                    if f.is_file():
+                        # Skip ignored directories
+                        if any(part in IGNORE_DIRS for part in f.parts):
+                            continue
+                        # Skip ignored extensions
+                        if f.suffix.lower() in IGNORE_EXTS:
+                            continue
+                        all_files.append(f)
+            
+            # Limit files based on config
             config = load_config()
             max_files = config.get("scan_depth", 100)
-            files = files[:max_files]
+            files = all_files[:max_files]
             
-            c.write(f"[#3b82f6]▸ Scanning {len(files)} files...[/]")
+            c.write(f"[#39ff14]  ✓ Found {len(files)} files to scan[/]")
+            if len(all_files) > max_files:
+                c.write(f"[dim]  (Limited to {max_files} files - change in Settings)[/dim]")
+            
             progress.update(progress=20)
             
-            secrets_found = []
-            vulns_found = []
+            # Step 3: Scan for secrets
+            c.write("")
+            c.write("[#3b82f6]▸ Scanning for secrets and credentials...[/]")
             
+            secrets_found = []
             for i, f in enumerate(files):
                 try:
-                    content = f.read_text(errors='ignore')
-                    
-                    s = scan_for_secrets(str(f), content, rules)
-                    if s:
-                        secrets_found.extend(s)
-                        for sec in s:
-                            c.write(f"[bold red]🔑 SECRET:[/] {sec.get('type', 'Unknown')} in [dim]{f.name}[/]")
-                    
-                    if f.suffix == ".py":
-                        v = scanner.scan_file(str(f))
-                        if v:
-                            vulns_found.extend(v)
-                            for vuln in v:
-                                color = {"critical": "#ef4444", "high": "#f97316", "medium": "#fbbf24", "low": "#22c55e"}.get(vuln.severity, "#6b7280")
-                                c.write(f"[bold {color}]⚠ {vuln.severity.upper()}:[/] {vuln.title}")
-                                
-                except Exception:
+                    # Use the proper scan_single_file function
+                    findings = scan_single_file(f, rules)
+                    if findings:
+                        for finding in findings:
+                            # Calculate entropy for filtering
+                            match_text = finding.get('match', '')
+                            entropy = calculate_entropy(match_text)
+                            
+                            if entropy > 3.0:  # Only high-entropy matches
+                                secrets_found.append(finding)
+                                c.write(f"[bold red]🔑 SECRET:[/] {f.name}:{finding.get('line', '?')}")
+                                c.write(f"[dim]   Pattern: {match_text[:50]}...[/dim]" if len(match_text) > 50 else f"[dim]   Pattern: {match_text}[/dim]")
+                except Exception as e:
                     pass
                 
                 # Update progress
-                pct = 20 + int((i / len(files)) * 70)
+                pct = 20 + int((i / max(len(files), 1)) * 35)
                 progress.update(progress=pct)
                 
-                if i % 20 == 0:
+                if i % 25 == 0:
+                    await asyncio.sleep(0.01)  # Allow UI updates
+            
+            c.write(f"[#39ff14]  ✓ Secret scan complete: {len(secrets_found)} found[/]")
+            progress.update(progress=60)
+            
+            # Step 4: Vulnerability scanning (Python files only)
+            c.write("")
+            c.write("[#3b82f6]▸ Scanning for code vulnerabilities...[/]")
+            
+            vulns_found = []
+            vuln_scanner = VulnerabilityScanner()
+            py_files = [f for f in files if f.suffix == '.py']
+            
+            for i, f in enumerate(py_files):
+                try:
+                    vulns = vuln_scanner.scan_file(str(f))
+                    if vulns:
+                        for v in vulns:
+                            vulns_found.append(v)
+                            severity_colors = {
+                                "critical": "#ef4444",
+                                "high": "#f97316", 
+                                "medium": "#fbbf24",
+                                "low": "#22c55e"
+                            }
+                            color = severity_colors.get(v.severity, "#6b7280")
+                            c.write(f"[bold {color}]⚠ {v.severity.upper()}:[/] {v.title}")
+                            c.write(f"[dim]   {f.name}:{v.line_number}[/dim]")
+                except Exception as e:
+                    pass
+                
+                pct = 60 + int((i / max(len(py_files), 1)) * 25)
+                progress.update(progress=pct)
+                
+                if i % 10 == 0:
                     await asyncio.sleep(0.01)
             
-            progress.update(progress=95)
+            c.write(f"[#39ff14]  ✓ Vulnerability scan complete: {len(vulns_found)} found[/]")
+            progress.update(progress=90)
             
-            # AI Verification (if enabled)
-            if ai_provider != "none" and secrets_found:
+            # Step 5: AI Verification (if enabled)
+            if ai_provider != "none" and config.get("enable_ai", True) and secrets_found:
+                c.write("")
                 c.write(f"[#3b82f6]▸ AI verification with {ai_provider}...[/]")
-                await asyncio.sleep(0.5)  # Placeholder
+                
+                try:
+                    if ai_provider == "huggingface":
+                        from ai_providers.huggingface_provider import HuggingFaceProvider
+                        provider = HuggingFaceProvider()
+                        if provider.initialize(quiet=True):
+                            verified = 0
+                            for finding in secrets_found[:5]:  # Limit AI calls
+                                is_secret = provider.verify(finding.get('match', ''), quiet=True)
+                                if is_secret:
+                                    verified += 1
+                                await asyncio.sleep(0.1)
+                            c.write(f"[#39ff14]  ✓ AI verified {verified}/{min(len(secrets_found), 5)} as real secrets[/]")
+                        else:
+                            c.write("[dim]  AI verification skipped (no HF_TOKEN)[/dim]")
+                except Exception as e:
+                    c.write(f"[dim]  AI verification error: {e}[/dim]")
             
-            elapsed = time.time() - start_time
             progress.update(progress=100)
             
-            c.write("")
-            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
-            c.write(f"[bold #39ff14]✓ SCAN COMPLETE[/] [dim]({elapsed:.2f}s)[/]")
-            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
-            c.write("")
-            c.write(f"[bold]📊 SUMMARY[/]")
-            c.write(f"   Files Scanned: [bold]{len(files)}[/]")
-            c.write(f"   Secrets Found: [bold red]{len(secrets_found)}[/]")
-            c.write(f"   Vulnerabilities: [bold #fbbf24]{len(vulns_found)}[/]")
+            # Final Summary
+            elapsed = time.time() - start_time
             
-            if secrets_found or vulns_found:
-                c.write("")
-                c.write("[bold red]⚠ Security issues detected![/]")
+            c.write("")
+            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+            c.write("[bold #39ff14]                    ✓ SCAN COMPLETE                            [/]")
+            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+            c.write("")
+            c.write("[bold]📊 RESULTS SUMMARY[/]")
+            c.write(f"   Files Scanned:    [bold]{len(files)}[/]")
+            c.write(f"   Secrets Found:    [bold red]{len(secrets_found)}[/]")
+            c.write(f"   Vulnerabilities:  [bold #fbbf24]{len(vulns_found)}[/]")
+            c.write(f"   Scan Duration:    [bold]{elapsed:.2f}s[/]")
+            c.write("")
+            
+            # Risk Assessment
+            if len(secrets_found) > 0 or any(v.severity in ['critical', 'high'] for v in vulns_found):
+                c.write("[bold red]⚠ SECURITY ISSUES DETECTED![/]")
+                c.write("[dim]Review findings above and fix before deploying.[/dim]")
             else:
-                c.write("")
-                c.write("[bold #39ff14]✓ No security issues detected.[/]")
+                c.write("[bold #39ff14]✓ No critical security issues detected.[/]")
             
         except ImportError as e:
             c.write(f"[bold red]✖ Module Error: {e}[/]")
+            c.write("[dim]Make sure all dependencies are installed.[/dim]")
             progress.update(progress=100)
         except Exception as e:
-            c.write(f"[bold red]✖ Error: {e}[/]")
+            c.write(f"[bold red]✖ Scan Error: {e}[/]")
+            import traceback
+            c.write(f"[dim]{traceback.format_exc()[:500]}[/dim]")
             progress.update(progress=100)
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -856,51 +963,104 @@ class URLScreen(Screen):
         c = self.query_one("#console", RichLog)
         progress = self.query_one("#progress", ProgressBar)
         c.clear()
-        c.write(f"[bold #39ff14]⚡ SCANNING: {url}[/]")
+        
+        c.write("[bold #39ff14]╔══════════════════════════════════════════════════════════════╗[/]")
+        c.write("[bold #39ff14]║[/]          [bold]🌐 CLONING & SCANNING REPOSITORY[/]                    [bold #39ff14]║[/]")
+        c.write("[bold #39ff14]╚══════════════════════════════════════════════════════════════╝[/]")
+        c.write("")
+        c.write(f"[dim]URL:[/] {url}")
+        c.write("")
         progress.update(progress=10)
         
         try:
             from url_scanner import URLScanner
-            from scanner import scan_for_secrets, load_rules
+            from scanner import scan_single_file, load_rules, calculate_entropy
             from vulnerability_scanner import VulnerabilityScanner
             
             c.write("[#3b82f6]▸ Cloning repository...[/]")
-            progress.update(progress=30)
+            c.write("[dim]  This may take a moment for large repos...[/dim]")
+            progress.update(progress=20)
+            await asyncio.sleep(0.1)
             
             with URLScanner() as scanner:
                 local_path = scanner.scan_url(url)
-                c.write(f"[#39ff14]✓ Cloned[/]")
-                progress.update(progress=50)
+                c.write(f"[#39ff14]  ✓ Repository cloned to temp directory[/]")
+                progress.update(progress=40)
                 
+                c.write("[#3b82f6]▸ Loading detection rules...[/]")
                 rules = load_rules()
                 vuln_scanner = VulnerabilityScanner()
                 
-                files = list(Path(local_path).rglob("*"))
-                files = [f for f in files if f.is_file()][:100]
+                # Collect files
+                IGNORE_DIRS = {'.git', '__pycache__', 'node_modules', 'venv', '.venv'}
+                files = []
+                for f in Path(local_path).rglob("*"):
+                    if f.is_file() and not any(part in IGNORE_DIRS for part in f.parts):
+                        files.append(f)
+                files = files[:100]  # Limit for performance
                 
-                c.write(f"[#3b82f6]▸ Scanning {len(files)} files...[/]")
+                c.write(f"[#39ff14]  ✓ Found {len(files)} files to scan[/]")
+                progress.update(progress=50)
                 
-                secrets = []
-                vulns = []
-                for f in files:
-                    try:
-                        content = f.read_text(errors='ignore')
-                        s = scan_for_secrets(str(f), content, rules)
-                        secrets.extend(s or [])
-                        if f.suffix == ".py":
-                            v = vuln_scanner.scan_file(str(f))
-                            vulns.extend(v or [])
-                    except: pass
-                
-                progress.update(progress=100)
+                # Scan for secrets
                 c.write("")
-                c.write(f"[bold #39ff14]✓ COMPLETE[/]")
-                c.write(f"   Secrets: [bold red]{len(secrets)}[/]")
+                c.write("[#3b82f6]▸ Scanning for secrets...[/]")
+                secrets = []
+                for i, f in enumerate(files):
+                    try:
+                        findings = scan_single_file(f, rules)
+                        for finding in findings or []:
+                            match_text = finding.get('match', '')
+                            entropy = calculate_entropy(match_text)
+                            if entropy > 3.0:
+                                secrets.append(finding)
+                                c.write(f"[bold red]🔑 SECRET:[/] {f.name}:{finding.get('line', '?')}")
+                    except:
+                        pass
+                    
+                    if i % 20 == 0:
+                        pct = 50 + int((i / len(files)) * 25)
+                        progress.update(progress=pct)
+                        await asyncio.sleep(0.01)
+                
+                c.write(f"[#39ff14]  ✓ Secret scan: {len(secrets)} found[/]")
+                progress.update(progress=80)
+                
+                # Scan for vulnerabilities
+                c.write("[#3b82f6]▸ Scanning for vulnerabilities...[/]")
+                vulns = []
+                py_files = [f for f in files if f.suffix == '.py']
+                for f in py_files:
+                    try:
+                        v = vuln_scanner.scan_file(str(f))
+                        if v:
+                            vulns.extend(v)
+                            for vuln in v[:2]:  # Limit output
+                                c.write(f"[bold #fbbf24]⚠ {vuln.severity.upper()}:[/] {vuln.title}")
+                    except:
+                        pass
+                
+                c.write(f"[#39ff14]  ✓ Vulnerability scan: {len(vulns)} found[/]")
+                progress.update(progress=100)
+                
+                # Summary
+                c.write("")
+                c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+                c.write("[bold #39ff14]                    ✓ SCAN COMPLETE                            [/]")
+                c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+                c.write("")
+                c.write(f"[bold]📊 RESULTS[/]")
+                c.write(f"   Repository: {url.split('/')[-1]}")
+                c.write(f"   Files Scanned: [bold]{len(files)}[/]")
+                c.write(f"   Secrets Found: [bold red]{len(secrets)}[/]")
                 c.write(f"   Vulnerabilities: [bold #fbbf24]{len(vulns)}[/]")
                 
         except Exception as e:
             c.write(f"[bold red]✖ Error: {e}[/]")
+            import traceback
+            c.write(f"[dim]{traceback.format_exc()[:300]}[/dim]")
             progress.update(progress=100)
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

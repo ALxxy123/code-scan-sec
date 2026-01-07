@@ -40,8 +40,9 @@ dependencies = [
     "reportlab>=4.0.0",
     "packaging>=23.0",
     "textual>=0.47.0",
-    "huggingface-hub>=0.20.0",
+    "huggingface-hub>=0.20.0,<1.0",
 ]
+
 
 
 [project.optional-dependencies]
