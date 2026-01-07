@@ -68,9 +68,17 @@ class HuggingFaceProvider(BaseAIProvider):
         
         if not token:
             if not quiet:
-                console.print("[bold yellow]⚠ HF_TOKEN not set. Running in offline mode.[/bold yellow]")
-                console.print("[dim]Set with: export HF_TOKEN='hf_xxx'[/dim]")
+                console.print("[bold yellow]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold yellow]")
+                console.print("[bold yellow]⚠ AI Verification Disabled (No HF_TOKEN found)[/bold yellow]")
+                console.print("[dim]The scanner will work but without AI-powered verification.[/dim]")
+                console.print("")
+                console.print("[cyan]To enable FREE AI verification:[/cyan]")
+                console.print("  1. Visit: [link=https://huggingface.co/settings/tokens]https://huggingface.co/settings/tokens[/link]")
+                console.print("  2. Create a free account & generate token")
+                console.print("  3. Add to .env file: HF_TOKEN=hf_your_token")
+                console.print("[bold yellow]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold yellow]")
             return False
+
         
         self.headers = {"Authorization": f"Bearer {token}"}
         self.initialized = True
