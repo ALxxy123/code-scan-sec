@@ -404,7 +404,10 @@ class DashboardScreen(Screen):
 class SettingsScreen(Screen):
     """Configuration settings."""
     
-    BINDINGS = [Binding("escape", "back", "Back")]
+    BINDINGS = [
+        Binding("escape", "back", "Back"),
+        Binding("s", "save", "Save"),
+    ]
 
     def compose(self) -> ComposeResult:
         config = load_config()
@@ -415,69 +418,91 @@ class SettingsScreen(Screen):
             # AI Provider Selection
             with Container(classes="settings-group"):
                 yield Static("🤖 AI PROVIDER", classes="settings-label")
+                yield Static("[dim]Choose AI engine for vulnerability verification[/dim]")
                 yield Select(
                     [
-                        ("🤗 HuggingFace (Free)", "huggingface"),
-                        ("Google Gemini", "gemini"),
-                        ("OpenAI GPT-4", "openai"),
-                        ("Anthropic Claude", "anthropic"),
-                        ("No AI (Offline)", "none"),
+                        ("🤗 HuggingFace (Free - Recommended)", "huggingface"),
+                        ("🔷 Google Gemini (API Key Required)", "gemini"),
+                        ("🟢 OpenAI GPT-4 (API Key Required)", "openai"),
+                        ("🟣 Anthropic Claude (API Key Required)", "anthropic"),
+                        ("⚫ No AI (Offline Mode)", "none"),
                     ],
                     value=config.get("ai_provider", "huggingface"),
-                    id="ai-select"
+                    id="ai-select",
+                    allow_blank=False,
                 )
             
             # Output Directory
             with Container(classes="settings-group"):
                 yield Static("📁 OUTPUT DIRECTORY", classes="settings-label")
-                yield Input(value=config.get("output_dir", "./output"), id="output-dir")
+                yield Static("[dim]Where to save scan reports[/dim]")
+                yield Input(value=config.get("output_dir", "./output"), id="output-dir", placeholder="./output")
             
             # Scan Depth
             with Container(classes="settings-group"):
                 yield Static("🔢 MAX FILES TO SCAN", classes="settings-label")
-                yield Input(value=str(config.get("scan_depth", 100)), id="scan-depth")
+                yield Static("[dim]Maximum number of files per scan (higher = slower)[/dim]")
+                yield Input(value=str(config.get("scan_depth", 100)), id="scan-depth", placeholder="100")
             
-            # Toggles
+            # Toggles Section
             with Container(classes="settings-group"):
                 yield Static("🔧 OPTIONS", classes="settings-label")
+                
                 with Horizontal():
-                    yield Static("Enable AI Verification: ")
                     yield Switch(value=config.get("enable_ai", True), id="enable-ai")
+                    yield Static("  Enable AI Verification")
+                
+                yield Static("")
+                
                 with Horizontal():
-                    yield Static("Auto-open Reports: ")
                     yield Switch(value=config.get("auto_open_reports", True), id="auto-open")
+                    yield Static("  Auto-open Reports in Browser")
             
             # Buttons
             with Center(classes="btn-row"):
-                yield Button("💾 SAVE SETTINGS", id="btn-save", classes="-primary")
-                yield Button("🔄 RESET DEFAULTS", id="btn-reset", classes="-warning")
-                yield Button("⬅ BACK", id="btn-back")
+                yield Button("💾 SAVE [S]", id="btn-save", classes="-primary")
+                yield Button("🔄 RESET", id="btn-reset", classes="-warning")
+                yield Button("⬅ BACK [Esc]", id="btn-back")
+            
+            # Status
+            yield Static("", id="status-msg")
         
         yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed):
-        if event.button.id == "btn-back":
+        bid = event.button.id
+        if bid == "btn-back":
             self.app.pop_screen()
-        elif event.button.id == "btn-save":
-            self._save_settings()
-        elif event.button.id == "btn-reset":
+        elif bid == "btn-save":
+            self.action_save()
+        elif bid == "btn-reset":
             self._reset_settings()
 
-    def _save_settings(self):
-        config = {
-            "ai_provider": self.query_one("#ai-select", Select).value,
-            "output_dir": self.query_one("#output-dir", Input).value,
-            "scan_depth": int(self.query_one("#scan-depth", Input).value or 100),
-            "enable_ai": self.query_one("#enable-ai", Switch).value,
-            "auto_open_reports": self.query_one("#auto-open", Switch).value,
-        }
-        save_config(config)
-        self.notify("Settings saved!", severity="information")
+    def action_save(self):
+        """Save settings to config file."""
+        try:
+            ai_select = self.query_one("#ai-select", Select)
+            output_dir = self.query_one("#output-dir", Input)
+            scan_depth = self.query_one("#scan-depth", Input)
+            enable_ai = self.query_one("#enable-ai", Switch)
+            auto_open = self.query_one("#auto-open", Switch)
+            
+            config = {
+                "ai_provider": ai_select.value if ai_select.value else "huggingface",
+                "output_dir": output_dir.value or "./output",
+                "scan_depth": int(scan_depth.value) if scan_depth.value.isdigit() else 100,
+                "enable_ai": enable_ai.value,
+                "auto_open_reports": auto_open.value,
+            }
+            save_config(config)
+            self.notify("✅ Settings saved successfully!", severity="information")
+        except Exception as e:
+            self.notify(f"❌ Error saving: {e}", severity="error")
 
     def _reset_settings(self):
+        """Reset to default settings."""
         save_config(DEFAULT_CONFIG)
-        self.notify("Settings reset to defaults!", severity="warning")
-        # Refresh screen
+        self.notify("🔄 Settings reset to defaults!", severity="warning")
         self.app.pop_screen()
         self.app.push_screen(SettingsScreen())
 
