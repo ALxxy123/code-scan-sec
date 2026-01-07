@@ -32,12 +32,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 CONFIG_FILE = Path.home() / ".security-scan" / "tui_config.json"
 
 DEFAULT_CONFIG = {
-    "ai_provider": "gemini",
+    "ai_provider": "huggingface",
     "output_dir": "./output",
     "scan_depth": 100,
     "enable_ai": True,
     "auto_open_reports": True,
 }
+
 
 def load_config():
     try:
@@ -416,12 +417,13 @@ class SettingsScreen(Screen):
                 yield Static("🤖 AI PROVIDER", classes="settings-label")
                 yield Select(
                     [
+                        ("🤗 HuggingFace (Free)", "huggingface"),
                         ("Google Gemini", "gemini"),
                         ("OpenAI GPT-4", "openai"),
                         ("Anthropic Claude", "anthropic"),
                         ("No AI (Offline)", "none"),
                     ],
-                    value=config.get("ai_provider", "gemini"),
+                    value=config.get("ai_provider", "huggingface"),
                     id="ai-select"
                 )
             
@@ -620,12 +622,13 @@ class ScanScreen(Screen):
                 yield Static("🤖 AI PROVIDER", classes="input-label")
                 yield Select(
                     [
+                        ("🤗 HuggingFace (Free)", "huggingface"),
                         ("Google Gemini", "gemini"),
                         ("OpenAI GPT-4", "openai"),
                         ("Anthropic Claude", "anthropic"),
                         ("No AI (Offline)", "none"),
                     ],
-                    value=config.get("ai_provider", "gemini"),
+                    value=config.get("ai_provider", "huggingface"),
                     id="ai-select"
                 )
             

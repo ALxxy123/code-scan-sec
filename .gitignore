@@ -13,3 +13,11 @@ security_scan.log
 
 # Test files
 /tmp/test_*.py
+
+# Environment & Secrets (IMPORTANT: Never commit!)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
