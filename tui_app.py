@@ -65,23 +65,26 @@ THEME = """
 }
 
 Screen {
-    background: #0a0e14;
+    background: #0f172a;  /* Slate 950 */
 }
 
 Header {
-    background: #1a1f29;
-    color: #39ff14;
+    background: #1e293b;  /* Slate 800 */
+    color: #38bdf8;       /* Sky 400 */
     text-style: bold;
+    border-bottom: solid #0f172a;
 }
 
 Footer {
-    background: #1a1f29;
-    color: #6b7280;
+    background: #1e293b;
+    color: #94a3b8;       /* Slate 400 */
+    border-top: solid #0f172a;
 }
 
 FooterKey {
-    background: #252b37;
-    color: #39ff14;
+    background: #334155;
+    color: #38bdf8;
+    padding: 0 1;
 }
 
 #main-box {
@@ -92,202 +95,187 @@ FooterKey {
 
 .logo-box {
     height: auto;
-    padding: 0;
+    padding: 1;
+    background: #1e293b;
+    border: solid #334155;
     margin-bottom: 1;
 }
 
-.logo-text {
+.title-text {
+    color: #38bdf8;
+    text-style: bold;
     text-align: center;
-    color: #39ff14;
 }
 
-.version-text {
-    text-align: center;
-    color: #6b7280;
-    padding-bottom: 1;
-}
-
-.menu-grid {
+/* DASHBOARD GRID */
+.dashboard-grid {
     layout: grid;
     grid-size: 4 2;
     grid-gutter: 1;
-    height: auto;
-    padding: 1;
+    margin: 1 1;
 }
 
-.menu-card {
-    height: 7;
-    border: solid #252b37;
-    background: #141922;
+.dashboard-card {
+    background: #1e293b;
+    border: solid #334155;
+    height: 100%;
     padding: 1;
+    align: center middle;
+}
+
+.dashboard-card:hover {
+    background: #334155;
+    border: solid #38bdf8;
+}
+
+.card-icon {
     text-align: center;
-    content-align: center middle;
-}
-
-.menu-card:hover {
-    border: solid #39ff14;
-    background: #1a2332;
-}
-
-.menu-card:focus {
-    border: double #39ff14;
-    background: #1f2d3d;
-}
-
-.menu-card.-exit {
-    border: solid #ff4444;
-}
-
-.menu-card.-exit:hover {
-    border: solid #ff6666;
-    background: #2a1a1a;
-}
-
-.menu-card.-settings {
-    border: solid #fbbf24;
-}
-
-.menu-card.-settings:hover {
-    border: solid #fcd34d;
-    background: #2a2a1a;
-}
-
-.status-bar {
-    height: 3;
-    background: #141922;
-    border: solid #252b37;
-    padding: 0 2;
-    margin-top: 1;
-}
-
-.status-ok {
-    color: #39ff14;
-}
-
-.status-text {
-    color: #6b7280;
-}
-
-.screen-title {
-    text-align: center;
-    background: #1a1f29;
-    color: #39ff14;
-    text-style: bold;
-    padding: 1;
-    border-bottom: solid #252b37;
-}
-
-.input-section {
-    background: #141922;
-    border: solid #252b37;
-    padding: 1 2;
-    margin: 1 0;
-}
-
-.input-label {
-    color: #39ff14;
-    text-style: bold;
+    color: #38bdf8;
     padding-bottom: 1;
 }
 
+.card-title {
+    text-align: center;
+    text-style: bold;
+    color: #f8fafc;
+}
+
+.card-desc {
+    text-align: center;
+    color: #94a3b8;
+}
+
+/* STATUS BAR */
+.status-bar {
+    height: 3;
+    background: #1e293b;
+    border-top: solid #334155;
+    padding: 1 2;
+    color: #94a3b8;
+    align-vertical: middle;
+}
+
+/* INPUTS & SELECTS */
 Input {
-    background: #0a0e14;
-    border: solid #252b37;
-    color: #e4e4e7;
+    background: #1e293b;
+    border: solid #475569;
+    color: #f8fafc;
+    padding: 0 1;
 }
 
 Input:focus {
-    border: solid #39ff14;
+    border: solid #38bdf8;
 }
 
 Select {
-    background: #141922;
-    border: solid #39ff14;
-    color: #e4e4e7;
+    background: #1e293b;
+    border: solid #475569;
+    color: #f8fafc;
     width: 100%;
     height: 3;
 }
 
 Select:focus {
-    border: double #39ff14;
+    border: double #38bdf8;
 }
 
 Select > SelectCurrent {
-    background: #141922;
-    color: #39ff14;
+    background: #1e293b;
+    color: #f8fafc;
 }
 
 Select > SelectOverlay {
-    background: #0a0e14;
-    border: solid #39ff14;
+    background: #0f172a;
+    border: solid #334155;
 }
 
 SelectOverlay:focus > SelectCurrent {
-    background: #252b37;
+    background: #334155;
+}
+
+/* BUTTONS */
+Button {
+    min-width: 16;
+    background: #334155;
+    color: #f8fafc;
+    border: none;
+}
+
+Button:hover {
+    background: #475569;
+}
+
+Button.-primary {
+    background: #0369a1; /* Sky 700 */
+    color: #ffffff;
+}
+
+Button.-primary:hover {
+    background: #0284c7; /* Sky 600 */
+}
+
+Button.-warning {
+    background: #b45309;
+    color: #ffffff;
+}
+
+Button.-danger {
+    background: #be123c;
+    color: #ffffff;
+}
+
+/* CONSOLE */
+RichLog {
+    background: #0f172a;
+    border: solid #334155;
+    padding: 1;
+    height: 1fr;
+    color: #e2e8f0;
+    overflow-y: scroll;
+}
+
+/* UTILS */
+.screen-title {
+    text-align: center;
+    color: #38bdf8;
+    text-style: bold;
+    padding: 1;
+    background: #1e293b;
+    border-bottom: solid #334155;
+    width: 100%;
+}
+
+.input-section {
+    padding: 1 2;
+    background: #1e293b;
+    border: solid #334155;
+    margin: 1 0;
+}
+
+.input-label {
+    color: #38bdf8;
+    margin-bottom: 1;
+    text-style: bold;
 }
 
 .btn-row {
     height: auto;
     padding: 1 0;
+    align: center middle;
+    background: #0f172a;
 }
 
-Button {
-    margin: 0 1;
-    min-width: 16;
-    background: #252b37;
-    color: #e4e4e7;
-    border: none;
+.settings-group {
+    background: #1e293b;
+    border: solid #334155;
+    padding: 1 2;
+    margin: 1 0;
 }
 
-Button:hover {
-    background: #3a4556;
-}
-
-Button.-primary {
-    background: #166534;
-    color: #ffffff;
-}
-
-Button.-primary:hover {
-    background: #22863a;
-}
-
-Button.-danger {
-    background: #7f1d1d;
-    color: #ffffff;
-}
-
-Button.-danger:hover {
-    background: #991b1b;
-}
-
-Button.-warning {
-    background: #854d0e;
-    color: #ffffff;
-}
-
-Button.-warning:hover {
-    background: #a16207;
-}
-
-.console-section {
-    background: #0a0e14;
-    border: solid #252b37;
-    padding: 1;
-    height: 1fr;
-}
-
-.console-title {
-    color: #fbbf24;
+.settings-label {
+    color: #38bdf8;
     text-style: bold;
     padding-bottom: 1;
-}
-
-RichLog {
-    background: #050709;
-    border: none;
-    scrollbar-background: #141922;
-    scrollbar-color: #252b37;
 }
 
 ProgressBar {
@@ -295,36 +283,16 @@ ProgressBar {
 }
 
 ProgressBar > .bar--bar {
-    color: #39ff14;
-}
-
-.settings-group {
-    background: #141922;
-    border: solid #252b37;
-    padding: 1 2;
-    margin: 1 0;
-}
-
-.settings-label {
-    color: #39ff14;
-    padding: 0 0 1 0;
+    color: #38bdf8;
+    background: #0369a1;
 }
 
 Switch {
-    background: #252b37;
+    background: #334155;
 }
 
 Switch.-on {
-    background: #166534;
-}
-
-RadioSet {
-    background: transparent;
-    border: none;
-}
-
-RadioButton {
-    background: transparent;
+    background: #0369a1;
 }
 """
 
@@ -362,33 +330,7 @@ class DashboardScreen(Screen):
         Binding("q", "quit", "Quit", show=True),
     ]
 
-    def compose(self) -> ComposeResult:
-        config = load_config()
-        yield Header(show_clock=True)
-        
-        with Vertical(id="main-box"):
-            with Container(classes="logo-box"):
-                yield Static(LOGO, classes="logo-text", markup=True)
-            
-            with Grid(classes="menu-grid"):
-                yield Button("🔍\n\nLOCAL SCAN\n[dim][1][/]", id="btn-1", classes="menu-card")
-                yield Button("🌐\n\nURL SCAN\n[dim][2][/]", id="btn-2", classes="menu-card")
-                yield Button("🎯\n\nBLACK BOX\n[dim][3][/]", id="btn-3", classes="menu-card")
-                yield Button("🔧\n\nAUTO FIX\n[dim][4][/]", id="btn-4", classes="menu-card")
-                yield Button("📊\n\nREPORTS\n[dim][5][/]", id="btn-5", classes="menu-card")
-                yield Button("📈\n\nBENCHMARK\n[dim][6][/]", id="btn-6", classes="menu-card")
-                yield Button("⚙️\n\nSETTINGS\n[dim][7][/]", id="btn-7", classes="menu-card -settings")
-                yield Button("🚪\n\nEXIT\n[dim][Q][/]", id="btn-q", classes="menu-card -exit")
-            
-            with Horizontal(classes="status-bar"):
-                yield Static("[bold #39ff14]●[/] SYSTEM ONLINE", classes="status-ok")
-                yield Static(f"  │  [dim]AI: {config['ai_provider'].upper()}[/]", classes="status-text")
-                yield Static(f"  │  [dim]User: {os.getenv('USER', os.getenv('USERNAME', 'Admin'))}[/]", classes="status-text")
-                yield Static(f"  │  [dim]v4.0.0[/]", classes="status-text")
-        
-        yield Footer()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
         actions = {
             "btn-1": self.action_go_scan,
@@ -398,10 +340,43 @@ class DashboardScreen(Screen):
             "btn-5": self.action_go_reports,
             "btn-6": self.action_go_benchmark,
             "btn-7": self.action_go_settings,
-            "btn-q": self.app.exit,
+            "btn-q": self.action_quit,
         }
         if bid in actions:
-            actions[bid]()
+            if asyncio.iscoroutinefunction(actions[bid]):
+                await actions[bid]()
+            else:
+                actions[bid]()
+
+    def compose(self) -> ComposeResult:
+        config = load_config()
+        # Clean Professional Header
+        yield Header(show_clock=True)
+        
+        with Vertical(id="main-box"):
+            # Enterprise Banner
+            with Container(classes="logo-box"):
+                yield Static("🛡️  ENTERPRISE SECURITY SCANNER", classes="title-text")
+                yield Static(f"[dim]v4.0.0 • AI Provider: {config['ai_provider'].upper()}[/]", classes="title-text")
+            
+            # Main Dashboard Grid
+            with Grid(classes="dashboard-grid"):
+                yield Button("🔍  LOCAL SCAN", id="btn-1", classes="dashboard-card")
+                yield Button("🌐  URL SCAN", id="btn-2", classes="dashboard-card")
+                yield Button("🎯  BLACK BOX", id="btn-3", classes="dashboard-card")
+                yield Button("🔧  AUTO FIX", id="btn-4", classes="dashboard-card")
+                yield Button("📊  REPORTS", id="btn-5", classes="dashboard-card")
+                yield Button("📈  BENCHMARK", id="btn-6", classes="dashboard-card")
+                yield Button("⚙️  SETTINGS", id="btn-7", classes="dashboard-card")
+                yield Button("🚪  EXIT", id="btn-q", classes="dashboard-card")
+            
+            # Status Bar
+            with Horizontal(classes="status-bar"):
+                yield Static("● SYSTEM STATUS: ONLINE", classes="status-ok")
+                yield Static(f"  │  OPERATOR: {os.getenv('USER', os.getenv('USERNAME', 'Admin'))}", classes="status-text")
+        
+        yield Footer()
+
 
     def action_go_scan(self): self.app.push_screen(ScanScreen())
     def action_go_url(self): self.app.push_screen(URLScreen())
@@ -578,60 +553,106 @@ class BenchmarkScreen(Screen):
         c = self.query_one("#console", RichLog)
         c.clear()
         
-        c.write("[bold #39ff14]🚀 STARTING BENCHMARK[/]")
-        c.write(f"[dim]Target: {path}[/]")
+        c.write("[bold #38bdf8]╔══════════════════════════════════════════════════════════════╗[/]")
+        c.write("[bold #38bdf8]║[/]          [bold]📈 PERFORMANCE BENCHMARKING[/]                         [bold #38bdf8]║[/]")
+        c.write("[bold #38bdf8]╚══════════════════════════════════════════════════════════════╝[/]")
+        c.write("")
+        c.write(f"[dim]Target Path:[/] {path}")
+        c.write("[dim]Mode:[/]        Full System Benchmark")
         c.write("")
         
         try:
-            import psutil
+            from benchmark import PerformanceMonitor, Benchmark
+            from scanner import scan_single_file, load_rules
             
-            start_time = time.time()
-            start_mem = psutil.Process().memory_info().rss / 1024 / 1024
+            c.write("[#38bdf8]🚀 Initializing Benchmark Suite...[/]")
+            c.write("[dim]Preparing test environment...[/dim]")
+            await asyncio.sleep(0.5) # UI update
             
-            target = Path(path).resolve()
-            files = list(target.rglob("*")) if target.is_dir() else [target]
-            files = [f for f in files if f.is_file()]
-            
-            c.write(f"[#3b82f6]▸ Found {len(files)} files[/]")
-            
-            # Simulate scan
-            lines_scanned = 0
-            for i, f in enumerate(files[:200]):
-                try:
-                    content = f.read_text(errors='ignore')
-                    lines_scanned += len(content.split('\n'))
-                except:
-                    pass
+            # Create a wrapped scan function for benchmarking
+            def benchmark_scan_task(target_path):
+                rules = load_rules()
+                target_p = Path(target_path).resolve()
+                files = list(target_p.rglob("*")) if target_p.is_dir() else [target_p]
+                files = [f for f in files if f.is_file()]
+                # Limit for benchmark speed if too large
+                processed_files = files[:500] 
                 
-                if i % 50 == 0:
-                    await asyncio.sleep(0.01)
-                    c.write(f"[dim]Processing... {i+1}/{min(len(files), 200)}[/dim]")
+                results = []
+                for f in processed_files:
+                    try:
+                        scan_single_file(f, rules)
+                    except: pass
+                return len(processed_files)
+
+            # Initialize Monitor
+            monitor = PerformanceMonitor("Local Scan Benchmark")
+            c.write("[#38bdf8]▸ Starting Performance Monitor...[/]")
+            monitor.start()
             
-            end_time = time.time()
-            end_mem = psutil.Process().memory_info().rss / 1024 / 1024
+            # Run the task in a thread to not block UI
+            c.write("[#38bdf8]▸ Executing Scan Operation...[/]")
             
-            duration = end_time - start_time
-            files_per_sec = min(len(files), 200) / duration if duration > 0 else 0
-            lines_per_sec = lines_scanned / duration if duration > 0 else 0
-            mem_used = end_mem - start_mem
+            # NOTE: In a real async app we would run this in an executor
+            # For simplicity here we might block slightly or use thread
+            start_t = time.time()
+            
+            # Collect files count first
+            target_p = Path(path).resolve()
+            files_count = 0
+            if target_p.exists():
+                files_count = len([f for f in target_p.rglob("*") if f.is_file()])
+            
+            # Simulate work for the visual feedback while doing real work? 
+            # Ideally we run the actual benchmark function.
+            
+            monitor.record_file_scanned(0) # Initialize
+            
+            # Actual execution
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, benchmark_scan_task, path)
+            
+            metrics = monitor.stop()
+            
+            # Add results to history
+            bench = Benchmark()
+            bench.add_result(metrics)
             
             c.write("")
-            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
-            c.write("[bold #39ff14]✓ BENCHMARK COMPLETE[/]")
-            c.write("[bold #39ff14]═══════════════════════════════════════════════════════════════[/]")
+            c.write("[bold #38bdf8]═══════════════════════════════════════════════════════════════[/]")
+            c.write("[bold #38bdf8]✓ BENCHMARK COMPLETE[/]")
+            c.write("[bold #38bdf8]═══════════════════════════════════════════════════════════════[/]")
             c.write("")
-            c.write(f"[bold]📊 RESULTS[/]")
-            c.write(f"   Duration: [bold]{duration:.2f}s[/]")
-            c.write(f"   Files Scanned: [bold]{min(len(files), 200)}[/]")
-            c.write(f"   Lines Scanned: [bold]{lines_scanned:,}[/]")
-            c.write(f"   Speed: [bold #39ff14]{files_per_sec:.1f}[/] files/sec")
-            c.write(f"   Speed: [bold #39ff14]{lines_per_sec:.0f}[/] lines/sec")
-            c.write(f"   Memory Delta: [bold]{mem_used:+.1f}[/] MB")
             
-        except ImportError:
-            c.write("[bold red]✖ psutil not installed[/]")
+            # Display beautifully in the log
+            c.write(f"[bold]📊 METRICS REPORT[/]")
+            c.write(f"   Duration:          [bold]{metrics.duration_seconds:.4f}s[/]")
+            c.write(f"   Files Processed:   [bold]{metrics.files_scanned}[/]")
+            c.write(f"   Throughput:        [bold #38bdf8]{metrics.files_per_second:.1f}[/] files/sec")
+            c.write(f"   Peak Memory:       [bold]{metrics.peak_memory_mb:.2f} MB[/]")
+            c.write(f"   CPU Usage (Avg):   [bold]{metrics.avg_cpu_percent:.1f}%[/]")
+            
+            # Compare with baseline
+            comparison = bench.compare_with_baseline(metrics)
+            if comparison['has_baseline']:
+                c.write("")
+                c.write("[bold]📈 COMPARISON (vs Avg)[/]")
+                
+                def fmt_diff(val, inverse=False):
+                    is_good = val < 0 if not inverse else val > 0
+                    color = "#39ff14" if is_good else "#ef4444"
+                    return f"[{color}]{val:+.1f}%[/{color}]"
+                
+                c.write(f"   Speed Delta:       {fmt_diff(comparison['speed_change_percent'], inverse=True)}")
+                c.write(f"   Memory Delta:      {fmt_diff(comparison['memory_change_percent'])}")
+            
+        except ImportError as e:
+            c.write(f"[bold red]✖ Dependency Error: {e}[/]")
         except Exception as e:
-            c.write(f"[bold red]✖ Error: {e}[/]")
+            c.write(f"[bold red]✖ Benchmark Error: {e}[/]")
+            import traceback
+            c.write(f"[dim]{traceback.format_exc()[:300]}[/dim]")
+
 
     def action_back(self):
         self.app.pop_screen()
