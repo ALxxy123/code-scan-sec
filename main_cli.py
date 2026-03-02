@@ -73,6 +73,11 @@ def scan_local(
     - Security vulnerabilities (SQLi, XSS, etc.)
     - Insecure configurations
     - Dangerous code patterns
+
+    Examples:
+        security-scan scan-local ./myproject
+        security-scan scan-local /path/to/code --format pdf
+        security-scan scan-local . --no-ai --quiet
     """
     if not quiet:
         print_banner()
@@ -142,6 +147,10 @@ def scan_url(
     - SSL/TLS validation
     - robots.txt analysis
     - Common path exposure check
+
+    Examples:
+        security-scan scan-url https://example.com
+        security-scan scan-url https://github.com/user/repo
     """
     if not quiet:
         print_banner()
@@ -193,6 +202,10 @@ def scan_blackbox(
     - SSL/TLS configuration
     - Common misconfigurations
     - Information disclosure
+
+    Examples:
+        security-scan scan-blackbox https://example.com
+        security-scan scan-blackbox https://api.example.com --timeout 60
     """
     if not quiet:
         print_banner()
@@ -238,6 +251,10 @@ def benchmark(
     - Files/lines processed per second
     - Memory usage
     - CPU utilization
+
+    Examples:
+        security-scan benchmark ./myproject
+        security-scan benchmark /path/to/code --name "my-benchmark"
     """
     print_banner()
 
@@ -271,7 +288,12 @@ def benchmark(
 
 @app.command()
 def check_update():
-    """Check for updates to Security Scan CLI"""
+    """
+    Check for updates to Security Scan CLI
+
+    Example:
+        security-scan check-update
+    """
     print_banner()
 
     console.print("\n🔄 [bold]Checking for updates...[/bold]\n")
@@ -282,7 +304,12 @@ def check_update():
 
 @app.command()
 def version():
-    """Display version information"""
+    """
+    Display version information
+
+    Example:
+        security-scan version
+    """
     info = f"""
 ╔══════════════════════════════════════════════════════════════╗
 ║  Security Scan CLI                                           ║
@@ -295,11 +322,8 @@ def version():
     console.print(info, style="bold cyan")
 
 
-@app.command()
-def menu():
-    """
-    Interactive menu (main interface)
-    """
+def _interactive_menu():
+    """Internal function for interactive menu"""
     print_banner()
 
     while True:
@@ -326,6 +350,28 @@ def menu():
         elif choice:
             console.print(f"\n[yellow]Tip: Run 'security-scan {choice}' directly from command line[/yellow]")
             console.print("[yellow]Interactive execution coming in next version![/yellow]\n")
+
+
+@app.command()
+def menu():
+    """
+    Interactive menu (main interface)
+
+    Example:
+        security-scan menu
+    """
+    _interactive_menu()
+
+
+@app.command()
+def interactive():
+    """
+    Interactive menu (alias for 'menu' command)
+
+    Example:
+        security-scan interactive
+    """
+    _interactive_menu()
 
 
 def _display_scan_results(result, quiet: bool = False):
