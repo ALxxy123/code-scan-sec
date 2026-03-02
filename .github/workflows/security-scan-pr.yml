@@ -1,0 +1,247 @@
+name: Security Scan - Pull Request
+
+on:
+  pull_request:
+    branches: [ main, master, develop ]
+    types: [ opened, synchronize, reopened ]
+
+jobs:
+  security-scan-pr:
+    name: Scan PR Changes
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Security Scanner
+        run: |
+          python -m pip install --upgrade pip
+          pip install security-scan-cli
+
+      - name: Get Changed Files
+        id: changed-files
+        run: |
+          # Get list of changed files in this PR
+          git fetch origin ${{ github.base_ref }}
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -E '\.(py|js|ts|jsx|tsx|java|php|go|rb|cs|cpp|c|h|yaml|yml|json|env|config)$' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No relevant files changed"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+            echo "$CHANGED_FILES" > changed_files.txt
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Security Scan on PR Changes
+        if: steps.changed-files.outputs.has_changes == 'true'
+        id: scan
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Create temp directory for changed files
+          mkdir -p /tmp/scan_target
+
+          # Copy changed files to scan directory
+          while IFS= read -r file; do
+            if [ -f "$file" ]; then
+              mkdir -p "/tmp/scan_target/$(dirname "$file")"
+              cp "$file" "/tmp/scan_target/$file"
+            fi
+          done < changed_files.txt
+
+          # Run scan on changed files
+          set +e
+          security-scan scan \
+            --path /tmp/scan_target \
+            --ai-provider gemini \
+            --output all \
+            --quiet
+
+          SCAN_EXIT_CODE=$?
+          set -e
+
+          echo "exit_code=$SCAN_EXIT_CODE" >> $GITHUB_OUTPUT
+
+          # Parse results
+          if [ -f "output/report.json" ]; then
+            TOTAL_SECRETS=$(jq '.summary.total_secrets // 0' output/report.json)
+            TOTAL_VULNS=$(jq '.summary.total_vulnerabilities // 0' output/report.json)
+            CRITICAL_VULNS=$(jq '.summary.vulnerability_stats.by_severity.critical // 0' output/report.json)
+            HIGH_VULNS=$(jq '.summary.vulnerability_stats.by_severity.high // 0' output/report.json)
+
+            echo "total_secrets=$TOTAL_SECRETS" >> $GITHUB_OUTPUT
+            echo "total_vulnerabilities=$TOTAL_VULNS" >> $GITHUB_OUTPUT
+            echo "critical_vulnerabilities=$CRITICAL_VULNS" >> $GITHUB_OUTPUT
+            echo "high_vulnerabilities=$HIGH_VULNS" >> $GITHUB_OUTPUT
+          else
+            echo "total_secrets=0" >> $GITHUB_OUTPUT
+            echo "total_vulnerabilities=0" >> $GITHUB_OUTPUT
+            echo "critical_vulnerabilities=0" >> $GITHUB_OUTPUT
+            echo "high_vulnerabilities=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload PR Scan Reports
+        uses: actions/upload-artifact@v4
+        if: always() && steps.changed-files.outputs.has_changes == 'true'
+        with:
+          name: pr-security-scan-reports
+          path: output/
+          retention-days: 30
+
+      - name: Post PR Comment with Results
+        if: steps.changed-files.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const totalSecrets = '${{ steps.scan.outputs.total_secrets }}' || '0';
+            const totalVulns = '${{ steps.scan.outputs.total_vulnerabilities }}' || '0';
+            const criticalVulns = '${{ steps.scan.outputs.critical_vulnerabilities }}' || '0';
+            const highVulns = '${{ steps.scan.outputs.high_vulnerabilities }}' || '0';
+
+            let status = '✅';
+            let statusText = 'PASSED';
+            let statusEmoji = '🟢';
+
+            if (criticalVulns > 0 || totalSecrets > 0) {
+              status = '🚨';
+              statusText = 'FAILED';
+              statusEmoji = '🔴';
+            } else if (highVulns > 0) {
+              status = '⚠️';
+              statusText = 'WARNING';
+              statusEmoji = '🟡';
+            }
+
+            let body = `## ${status} Security Scan Results\n\n`;
+            body += `**Status:** ${statusEmoji} **${statusText}**\n\n`;
+            body += `### Summary\n`;
+            body += `| Category | Count |\n`;
+            body += `|----------|-------|\n`;
+            body += `| 🔑 Secrets | ${totalSecrets} |\n`;
+            body += `| 🐛 Total Vulnerabilities | ${totalVulns} |\n`;
+            body += `| 🔥 Critical | ${criticalVulns} |\n`;
+            body += `| ⚠️ High | ${highVulns} |\n\n`;
+
+            // Add detailed findings if report exists
+            if (fs.existsSync('output/report.json')) {
+              const report = JSON.parse(fs.readFileSync('output/report.json', 'utf8'));
+
+              if (report.secrets && report.secrets.length > 0) {
+                body += `### 🔑 Secrets Detected\n\n`;
+                report.secrets.slice(0, 3).forEach((secret, i) => {
+                  const fileName = secret.file_path.split('/').pop();
+                  body += `${i + 1}. **${secret.type}** in \`${fileName}:${secret.line_number}\`\n`;
+                });
+                if (report.secrets.length > 3) {
+                  body += `\n... and ${report.secrets.length - 3} more\n`;
+                }
+                body += '\n';
+              }
+
+              const critical = report.vulnerabilities?.filter(v => v.severity === 'critical') || [];
+              const high = report.vulnerabilities?.filter(v => v.severity === 'high') || [];
+
+              if (critical.length > 0) {
+                body += `### 🔥 Critical Vulnerabilities\n\n`;
+                critical.slice(0, 3).forEach((vuln, i) => {
+                  const fileName = vuln.file_path.split('/').pop();
+                  body += `${i + 1}. **${vuln.name}** (${vuln.cwe})\n`;
+                  body += `   - \`${fileName}:${vuln.line_number}\`\n`;
+                  body += `   - ${vuln.recommendation}\n\n`;
+                });
+                if (critical.length > 3) {
+                  body += `... and ${critical.length - 3} more\n\n`;
+                }
+              }
+
+              if (high.length > 0 && critical.length === 0) {
+                body += `### ⚠️ High Severity Vulnerabilities\n\n`;
+                high.slice(0, 3).forEach((vuln, i) => {
+                  const fileName = vuln.file_path.split('/').pop();
+                  body += `${i + 1}. **${vuln.name}** (${vuln.cwe})\n`;
+                  body += `   - \`${fileName}:${vuln.line_number}\`\n\n`;
+                });
+                if (high.length > 3) {
+                  body += `... and ${high.length - 3} more\n\n`;
+                }
+              }
+            }
+
+            body += `---\n`;
+            body += `📊 **Full Report:** Download the workflow artifacts for detailed HTML/JSON reports\n`;
+            body += `🔍 **Scanned:** Only files changed in this PR\n\n`;
+
+            if (statusText === 'FAILED') {
+              body += `> **⛔ Action Required:** This PR introduces critical security issues. Please fix before merging.\n`;
+            } else if (statusText === 'WARNING') {
+              body += `> **⚠️ Review Recommended:** This PR has high severity findings. Consider fixing before merge.\n`;
+            } else {
+              body += `> **✅ Safe to merge:** No critical security issues detected.\n`;
+            }
+
+            // Find existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Security Scan Results')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: Set PR Check Status
+        if: steps.changed-files.outputs.has_changes == 'true'
+        run: |
+          CRITICAL=${{ steps.scan.outputs.critical_vulnerabilities }}
+          SECRETS=${{ steps.scan.outputs.total_secrets }}
+
+          if [ "$CRITICAL" -gt 0 ] || [ "$SECRETS" -gt 0 ]; then
+            echo "::error::Security scan failed - Critical issues found"
+            exit 1
+          fi
+
+      - name: No Changes to Scan
+        if: steps.changed-files.outputs.has_changes == 'false'
+        run: |
+          echo "No relevant files changed in this PR"
+          echo "Skipping security scan"

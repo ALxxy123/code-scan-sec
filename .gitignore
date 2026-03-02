@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
+
+# Output and logs
+output/
+security_scan.log
+*.log
+
+# Test files
+/tmp/test_*.py
+
+# Environment & Secrets (IMPORTANT: Never commit!)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/

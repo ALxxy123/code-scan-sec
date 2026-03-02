@@ -1,4 +1,0 @@
-rich[all]
-google-generativeai
-openai
-typer
