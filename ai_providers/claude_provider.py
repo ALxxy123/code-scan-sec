@@ -103,6 +103,11 @@ Reply with ONLY 'Yes' if it's a real secret, or 'No' if it's just a placeholder/
             except Exception as e:
                 error_message = str(e)
 
+                # Non-retriable: invalid request (e.g. duplicate tool_use ids)
+                if 'invalid_request_error' in error_message.lower() or 'tool_use ids must be unique' in error_message.lower():
+                    print(f"[red]✗ Claude invalid request: {e}[/red]")
+                    return False
+
                 # Check for rate limit errors
                 if 'rate_limit' in error_message.lower() or '429' in error_message:
                     # Extract retry-after time if available
