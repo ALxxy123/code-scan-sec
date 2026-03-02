@@ -12,6 +12,7 @@ Free tier: 30,000 requests/month
 import os
 import time
 import json
+from pathlib import Path
 from typing import Optional, Dict, Any
 from rich.console import Console
 from .base_provider import BaseAIProvider
@@ -246,8 +247,9 @@ List any security issues found. Format as JSON:
         except Exception as e:
             if not quiet:
                 console.print(f"[bold red]Analysis error: {e}[/bold red]")
-        
-        return {"error": str(e), "vulnerabilities": []}
+            return {"error": str(e), "vulnerabilities": []}
+
+        return {"vulnerabilities": []}
 
 
 def get_available_models() -> Dict[str, str]:

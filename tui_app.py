@@ -294,6 +294,34 @@ Switch {
 Switch.-on {
     background: #0369a1;
 }
+
+/* CONSOLE SECTION */
+.console-section {
+    background: #0f172a;
+    border: solid #334155;
+    padding: 0 1;
+    height: 1fr;
+    margin-top: 1;
+}
+
+.console-title {
+    color: #38bdf8;
+    text-style: bold;
+    padding: 0 1;
+    background: #1e293b;
+    border-bottom: solid #334155;
+    height: 3;
+}
+
+/* STATUS BAR LABELS */
+.status-ok {
+    color: #39ff14;
+    text-style: bold;
+}
+
+.status-text {
+    color: #94a3b8;
+}
 """
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -569,49 +597,37 @@ class BenchmarkScreen(Screen):
             c.write("[dim]Preparing test environment...[/dim]")
             await asyncio.sleep(0.5) # UI update
             
-            # Create a wrapped scan function for benchmarking
+            # Initialize Monitor before the scan task
+            monitor = PerformanceMonitor("Local Scan Benchmark")
+            c.write("[#38bdf8]▸ Starting Performance Monitor...[/]")
+            monitor.start()
+
+            # Create a wrapped scan function that records per-file metrics
             def benchmark_scan_task(target_path):
                 rules = load_rules()
                 target_p = Path(target_path).resolve()
                 files = list(target_p.rglob("*")) if target_p.is_dir() else [target_p]
                 files = [f for f in files if f.is_file()]
                 # Limit for benchmark speed if too large
-                processed_files = files[:500] 
-                
-                results = []
+                processed_files = files[:500]
+
                 for f in processed_files:
                     try:
                         scan_single_file(f, rules)
-                    except: pass
+                        try:
+                            line_count = f.read_text(errors="ignore").count("\n")
+                        except Exception:
+                            line_count = 0
+                        monitor.record_file_scanned(line_count)
+                    except Exception:
+                        pass
                 return len(processed_files)
 
-            # Initialize Monitor
-            monitor = PerformanceMonitor("Local Scan Benchmark")
-            c.write("[#38bdf8]▸ Starting Performance Monitor...[/]")
-            monitor.start()
-            
             # Run the task in a thread to not block UI
             c.write("[#38bdf8]▸ Executing Scan Operation...[/]")
-            
-            # NOTE: In a real async app we would run this in an executor
-            # For simplicity here we might block slightly or use thread
-            start_t = time.time()
-            
-            # Collect files count first
-            target_p = Path(path).resolve()
-            files_count = 0
-            if target_p.exists():
-                files_count = len([f for f in target_p.rglob("*") if f.is_file()])
-            
-            # Simulate work for the visual feedback while doing real work? 
-            # Ideally we run the actual benchmark function.
-            
-            monitor.record_file_scanned(0) # Initialize
-            
-            # Actual execution
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, benchmark_scan_task, path)
-            
+
             metrics = monitor.stop()
             
             # Add results to history
@@ -1036,10 +1052,10 @@ class URLScreen(Screen):
                             if entropy > 3.0:
                                 secrets.append(finding)
                                 c.write(f"[bold red]🔑 SECRET:[/] {f.name}:{finding.get('line', '?')}")
-                    except:
+                    except Exception:
                         pass
-                    
-                    if i % 20 == 0:
+
+                    if i % 20 == 0 and len(files) > 0:
                         pct = 50 + int((i / len(files)) * 25)
                         progress.update(progress=pct)
                         await asyncio.sleep(0.01)
@@ -1120,8 +1136,10 @@ class BlackBoxScreen(Screen):
     def action_back(self): self.app.pop_screen()
     
     def action_start(self):
-        url = self.query_one("#url-input", Input).value
-        if not url: return
+        url = self.query_one("#url-input", Input).value.strip()
+        if not url:
+            self.notify("Enter a target URL first.", severity="warning")
+            return
         asyncio.create_task(self._run_blackbox(url))
 
     async def _run_blackbox(self, url: str):
@@ -1213,12 +1231,17 @@ class AutoFixScreen(Screen):
         try:
             from auto_fix import AutoFix
             fixer = AutoFix(interactive=False)
-            
+
             files = list(Path(path).resolve().rglob("*.py"))[:50]
             total = 0
-            
+
+            if not files:
+                c.write("[dim]No Python files found in the specified path.[/dim]")
+                progress.update(progress=100)
+                return
+
             for i, f in enumerate(files):
-                progress.update(progress=int((i/len(files))*100))
+                progress.update(progress=int((i / len(files)) * 100))
                 try:
                     content = f.read_text(errors='ignore')
                     _, crypto = fixer.fix_weak_crypto(str(f), content)
@@ -1247,12 +1270,17 @@ class AutoFixScreen(Screen):
         try:
             from auto_fix import AutoFix
             fixer = AutoFix(interactive=False)
-            
+
             files = list(Path(path).resolve().rglob("*.py"))[:50]
             fixed = 0
-            
+
+            if not files:
+                c.write("[dim]No Python files found in the specified path.[/dim]")
+                progress.update(progress=100)
+                return
+
             for i, f in enumerate(files):
-                progress.update(progress=int((i/len(files))*100))
+                progress.update(progress=int((i / len(files)) * 100))
                 try:
                     result = fixer.fix_file(str(f))
                     if result.get('fixes_applied', 0) > 0:
@@ -1315,27 +1343,96 @@ class ReportsScreen(Screen):
         elif event.button.id == "btn-open": self._open_folder()
 
     def _export_pdf(self):
+        """Export a summary report of all existing scan results."""
         c = self.query_one("#console", RichLog)
         try:
-            from report_generator import ReportGenerator
-            gen = ReportGenerator()
-            c.write("[#3b82f6]▸ Generating PDF...[/]")
-            # This would need actual data - placeholder
-            c.write("[bold #39ff14]✓ PDF export feature ready[/]")
-            c.write("[dim]Run a scan first to generate PDF report[/]")
+            output = Path("output")
+            output.mkdir(parents=True, exist_ok=True)
+
+            json_reports = sorted(output.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)
+
+            if not json_reports:
+                c.write("[dim]No scan results found. Run a scan first to generate a report.[/dim]")
+                self.notify("No scan data found – run a scan first.", severity="warning")
+                return
+
+            # Build an HTML summary from the most recent JSON reports
+            c.write("[#3b82f6]▸ Building report from scan data...[/]")
+            import json as _json
+            from datetime import datetime as _dt
+
+            rows = []
+            for jf in json_reports[:10]:
+                try:
+                    data = _json.loads(jf.read_text(encoding="utf-8", errors="ignore"))
+                    name = jf.stem
+                    secrets = len(data.get("secrets", []))
+                    vulns   = len(data.get("vulnerabilities", []))
+                    rows.append((name, secrets, vulns))
+                except Exception:
+                    pass
+
+            if not rows:
+                c.write("[dim]Could not parse any scan results.[/dim]")
+                self.notify("Could not read scan results.", severity="warning")
+                return
+
+            ts   = _dt.now().strftime("%Y%m%d_%H%M%S")
+            html = output / f"summary_report_{ts}.html"
+
+            html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Security Scanner – Summary Report</title>
+<style>
+  body{{font-family:monospace;background:#0f172a;color:#e2e8f0;padding:2em}}
+  h1{{color:#38bdf8}} table{{border-collapse:collapse;width:100%;margin-top:1em}}
+  th,td{{padding:.5em 1em;border:1px solid #334155;text-align:left}}
+  th{{background:#1e293b;color:#38bdf8}} tr:nth-child(even){{background:#1e293b}}
+  .red{{color:#ef4444}} .green{{color:#39ff14}} .footer{{margin-top:2em;color:#6b7280;font-size:.85em}}
+</style>
+</head>
+<body>
+<h1>🛡️ Security Scanner – Summary Report</h1>
+<p>Generated: {_dt.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+<table>
+  <tr><th>Scan Name</th><th>Secrets Found</th><th>Vulnerabilities Found</th></tr>
+  {"".join(
+      f'<tr><td>{r[0]}</td><td class="{"red" if r[1]>0 else "green"}">{r[1]}</td>'
+      f'<td class="{"red" if r[2]>0 else "green"}">{r[2]}</td></tr>'
+      for r in rows
+  )}
+</table>
+<p class="footer">Security Scanner Pro v4.0.0</p>
+</body>
+</html>"""
+
+            html.write_text(html_content, encoding="utf-8")
+            c.write(f"[bold #39ff14]✓ Report saved:[/] {html.name}")
+            self.notify(f"Report saved: {html.name}", severity="information")
+            self._list_reports()
+
         except Exception as e:
-            c.write(f"[bold red]✖ Error: {e}[/]")
+            c.write(f"[bold red]✖ Export error: {e}[/]")
+            self.notify(f"Export failed: {e}", severity="error")
 
     def _open_folder(self):
         import subprocess
         output = Path("output")
-        if output.exists():
+        output.mkdir(parents=True, exist_ok=True)
+        try:
             if sys.platform == "win32":
-                subprocess.run(["explorer", str(output)])
+                subprocess.Popen(["explorer", str(output.resolve())])
             elif sys.platform == "darwin":
-                subprocess.run(["open", str(output)])
+                subprocess.Popen(["open", str(output.resolve())])
             else:
-                subprocess.run(["xdg-open", str(output)])
+                subprocess.Popen(["xdg-open", str(output.resolve())])
+            self.notify(f"Opened: {output.resolve()}", severity="information")
+        except FileNotFoundError:
+            self.notify(f"Folder: {output.resolve()}", severity="information")
+        except Exception as e:
+            self.notify(f"Cannot open folder: {e}", severity="error")
     
     def action_back(self): self.app.pop_screen()
 
